@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('timerAPI', {
   viewChanged: (view) => ipcRenderer.send('view-changed', view),
   collapse: () => ipcRenderer.send('collapse'),
   expand: () => ipcRenderer.send('expand'),
+  moveWindow: (dx, dy) => ipcRenderer.send('move-window', { dx, dy }),
+  resizeBy: (dw, dh) => ipcRenderer.send('resize-by', { dw, dh }),
   hideWidget: () => ipcRenderer.send('hide-widget'),
   openSettings: () => ipcRenderer.send('open-settings'),
   dismissBanner: () => ipcRenderer.send('dismiss-banner'),

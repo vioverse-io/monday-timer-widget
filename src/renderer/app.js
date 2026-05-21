@@ -60,6 +60,7 @@
     $('topbar').classList.toggle('hidden', isPill);
     $('body').classList.toggle('hidden', isPill);
     $('app').classList.toggle('is-pill', isPill);
+    $('resize-grip').classList.toggle('hidden', isPill);
     // The demo banner is hidden in the collapsed pill (it would eat the 40px height).
     $('banner').classList.toggle('hidden', isPill || !state.bannerVisible);
 
@@ -255,6 +256,53 @@
     }
   }
 
+  // ---- pill: click to expand, drag to move ----
+  // The pill can't be a -webkit-app-region drag target (that swallows clicks), so we
+  // implement move + click here with pointer capture (so it keeps tracking off-window).
+  function bindPill() {
+    const pill = $('view-pill');
+    let drag = null;
+    pill.addEventListener('pointerdown', (e) => {
+      try { pill.setPointerCapture(e.pointerId); } catch (_) { /* synthetic/edge */ }
+      drag = { x: e.screenX, y: e.screenY, moved: false };
+    });
+    pill.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.screenX - drag.x;
+      const dy = e.screenY - drag.y;
+      if (drag.moved || Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        drag.moved = true;
+        api.moveWindow(dx, dy);
+        drag.x = e.screenX;
+        drag.y = e.screenY;
+      }
+    });
+    pill.addEventListener('pointerup', () => {
+      if (drag && !drag.moved) setView(state.running ? 'running' : 'idle');
+      drag = null;
+    });
+  }
+
+  // ---- resize grip (bottom-right) ----
+  function bindResizeGrip() {
+    const grip = $('resize-grip');
+    let drag = null;
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { grip.setPointerCapture(e.pointerId); } catch (_) { /* synthetic/edge */ }
+      drag = { x: e.screenX, y: e.screenY };
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dw = e.screenX - drag.x;
+      const dh = e.screenY - drag.y;
+      drag.x = e.screenX;
+      drag.y = e.screenY;
+      api.resizeBy(dw, dh);
+    });
+    grip.addEventListener('pointerup', () => { drag = null; });
+  }
+
   // ---- events binding ----
   function bind() {
     $('settings-btn').addEventListener('click', () => api.openSettings());
@@ -274,7 +322,8 @@
       setView('idle');
     });
 
-    $('view-pill').addEventListener('click', () => setView(state.running ? 'running' : 'idle'));
+    bindPill();
+    bindResizeGrip();
 
     $('seg-mine').addEventListener('click', () => setScope('mine'));
     $('seg-all').addEventListener('click', () => setScope('all'));

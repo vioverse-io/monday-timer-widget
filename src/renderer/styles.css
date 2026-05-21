@@ -74,7 +74,14 @@ html, body {
   letter-spacing: 0.6px;
   color: var(--text-secondary);
 }
-.no-drag { -webkit-app-region: no-drag; }
+/* Anything interactive must be no-drag, including its children — otherwise a click
+   landing on a child (e.g. the <svg> inside a button) is swallowed by the drag region.
+   pointer-events:none on icon SVGs makes the button itself the click target. */
+.no-drag, .no-drag * { -webkit-app-region: no-drag; }
+.icon-btn, .icon-btn *, .btn, .btn * { -webkit-app-region: no-drag; }
+.icon-btn svg, .btn svg, .seg svg, .job-row-play svg, .banner-x svg, .resize-grip svg {
+  pointer-events: none;
+}
 
 .icon-btn {
   -webkit-app-region: no-drag;
@@ -244,15 +251,36 @@ html, body {
 
 /* ---- Collapsed pill ---- */
 .app.is-pill { background: var(--bg-primary); }
+/* The pill is NOT a drag region: a drag region swallows clicks in Electron, which
+   would make it impossible to click the pill to expand. Dragging-to-move and
+   click-to-expand are handled in app.js via pointer events instead. */
 .pill {
   height: 100vh;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
   cursor: pointer;
 }
+
+/* Bottom-right resize grip */
+.resize-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 2px;
+  color: var(--text-tertiary);
+  cursor: nwse-resize;
+  -webkit-app-region: no-drag;
+  z-index: 30;
+}
+.resize-grip:hover { color: var(--text-secondary); }
 .pill-time {
   font-size: 15px;
   font-family: "SF Mono", "Cascadia Mono", "Consolas", monospace;

@@ -34,6 +34,7 @@ let jobsCache = { recent: [], all: [], byId: {} };
 let pendingMorning = null;
 let undoTimer = null;
 let lastFullView = 'idle';
+let currentView = 'idle';
 
 // ---------------------------------------------------------------------------
 // Logging (weekly-rotated file in userData/logs)
@@ -139,17 +140,37 @@ function savePosition() {
   savePosTimer = setTimeout(() => settings.set('windowPosition', { x, y }), 400);
 }
 
+// Size for a view = its base size, plus the user's grip-resize delta for full views.
+function userDelta() {
+  const d = settings.get('userSize') || { dw: 0, dh: 0 };
+  return { dw: d.dw || 0, dh: d.dh || 0 };
+}
+function sizeForView(view) {
+  const base = SIZES[view] || SIZES.idle;
+  if (view === 'pill') return { w: base.w, h: base.h };
+  const d = userDelta();
+  return {
+    w: Math.max(280, Math.min(900, base.w + d.dw)),
+    h: Math.max(150, Math.min(1000, base.h + d.dh))
+  };
+}
+
 function createMainWindow() {
   const pos = restorePosition();
+  const start = sizeForView('idle');
   mainWindow = new BrowserWindow({
-    width: SIZES.idle.w,
-    height: SIZES.idle.h,
+    width: start.w,
+    height: start.h,
     x: pos.x,
     y: pos.y,
     useContentSize: true,
     frame: false,
     transparent: false,
-    resizable: false,
+    // Resizable so the user can grow the widget AND so programmatic setContentSize
+    // works in BOTH directions (a non-resizable window won't shrink on Windows).
+    resizable: true,
+    minWidth: 120,
+    minHeight: 40,
     maximizable: false,
     minimizable: false,
     fullscreenable: false,
@@ -166,6 +187,17 @@ function createMainWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
   mainWindow.on('move', savePosition);
+  // Persist the user's size whenever they resize a full view (skip the pill).
+  mainWindow.on('resize', () => {
+    if (!mainWindow || mainWindow.isDestroyed() || currentView === 'pill') return;
+    const [w, h] = mainWindow.getContentSize();
+    const base = SIZES[lastFullView] || SIZES.idle;
+    settings.set('userSize', { dw: w - base.w, dh: h - base.h });
+  });
+  // Surface renderer warnings/errors to the log file for diagnosis.
+  mainWindow.webContents.on('console-message', (_e, level, message) => {
+    if (level >= 2) log('renderer: ' + message);
+  });
   mainWindow.on('close', (e) => {
     if (!app.isQuitting) {
       e.preventDefault();
@@ -177,16 +209,10 @@ function createMainWindow() {
 
 function resizeForView(view) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const size = SIZES[view] || SIZES.idle;
+  currentView = view;
   if (view !== 'pill') lastFullView = view;
-  // setContentSize/setSize is ignored or one-directional (won't shrink) while a window
-  // is non-resizable on Windows — so the window grows when opening the picker but never
-  // returns, leaving later views (esp. the pill) stranded in an oversized frame. Toggle
-  // resizable around the call so the size always takes, then re-lock it.
-  const wasResizable = mainWindow.isResizable();
-  mainWindow.setResizable(true);
+  const size = sizeForView(view);
   mainWindow.setContentSize(size.w, size.h);
-  mainWindow.setResizable(wasResizable);
 }
 
 function showWidget() {
@@ -567,6 +593,21 @@ function registerIpc() {
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
   ipcMain.on('hide-widget', () => mainWindow && mainWindow.hide());
+  // Custom drag/resize for frameless areas that can't use -webkit-app-region.
+  ipcMain.on('move-window', (_e, { dx, dy }) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const [x, y] = mainWindow.getPosition();
+    mainWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+  });
+  ipcMain.on('resize-by', (_e, { dw, dh }) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const [w, h] = mainWindow.getContentSize();
+    const nw = Math.max(280, Math.min(900, Math.round(w + dw)));
+    const nh = Math.max(150, Math.min(1000, Math.round(h + dh)));
+    mainWindow.setContentSize(nw, nh);
+    const base = SIZES[lastFullView] || SIZES.idle;
+    settings.set('userSize', { dw: nw - base.w, dh: nh - base.h });
+  });
   ipcMain.on('open-settings', openSettingsWindow);
   ipcMain.on('dismiss-banner', () => { bannerVisible = false; pushState(); });
   ipcMain.on('refresh-jobs', (_e, scope) => pushJobs(scope || 'mine'));
@@ -731,6 +772,38 @@ function runCapture() {
     await mainWindow.webContents.executeJavaScript("document.getElementById('min-btn').click()");
     await grab('cap-4-pill.png');
     console.log('CAP pill content=' + JSON.stringify(mainWindow.getContentSize()));
+
+    // Test: click the pill (pointerdown+up, no move) → must expand back to a full view.
+    const expanded = await mainWindow.webContents.executeJavaScript(`(() => {
+      const p = document.getElementById('view-pill');
+      p.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, screenX: 50, screenY: 20, bubbles: true }));
+      p.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, screenX: 50, screenY: 20, bubbles: true }));
+      return !document.getElementById('view-running').classList.contains('hidden');
+    })()`);
+    await wait(150);
+    console.log(`CAP pill-click-expands=${expanded} content=${JSON.stringify(mainWindow.getContentSize())}`);
+
+    // Test: grip resize via the bridge → window grows.
+    const before = mainWindow.getContentSize();
+    await mainWindow.webContents.executeJavaScript('window.timerAPI.resizeBy(60, 40)');
+    await wait(150);
+    const after = mainWindow.getContentSize();
+    console.log(`CAP resizeBy before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+    await grab('cap-5-resized.png');
+
+    // Hit-test: clicking the visual center of each topbar icon must resolve to the
+    // button itself (proves pointer-events:none on the SVG + no-drag are working).
+    const hit = await mainWindow.webContents.executeJavaScript(`(() => {
+      const out = {};
+      for (const id of ['settings-btn','min-btn','close-btn','stop-btn','switch-btn']) {
+        const el = document.getElementById(id);
+        const r = el.getBoundingClientRect();
+        const at = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2);
+        out[id] = at && at.closest('button') ? at.closest('button').id : (at ? at.tagName : 'none');
+      }
+      return out;
+    })()`);
+    console.log('CAP topbar hit-test=' + JSON.stringify(hit));
 
     app.isQuitting = true;
     setTimeout(() => app.quit(), 200);

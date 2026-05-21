@@ -154,6 +154,8 @@
     viewChanged: () => {},
     collapse: () => {},
     expand: () => {},
+    moveWindow: () => {},
+    resizeBy: () => {},
     hideWidget: () => {},
     openSettings: () => alert('Settings window (Electron only)'),
     dismissBanner: () => { T.bannerVisible = false; },

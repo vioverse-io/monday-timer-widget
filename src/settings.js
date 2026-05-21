@@ -38,6 +38,9 @@ const defaults = {
   // Window position memory ({x, y} or null for default)
   windowPosition: null,
 
+  // User resize preference: pixels added to each full view's base size (grip drag)
+  userSize: { dw: 0, dh: 0 },
+
   // Network resilience: completed sessions awaiting a successful Monday write
   retryQueue: [],
 
