@@ -9,8 +9,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "dist": "electron-builder",
-    "pack": "electron-builder --dir"
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --win --dir"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
