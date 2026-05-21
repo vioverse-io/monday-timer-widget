@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Compu-Mail Timer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+
+    <!-- Demo-mode banner -->
+    <div id="banner" class="banner hidden">
+      <span>DEMO MODE</span>
+      <button id="banner-x" class="banner-x" title="Dismiss">×</button>
+    </div>
+
+    <!-- Top bar (drag handle) -->
+    <div id="topbar" class="topbar">
+      <div class="topbar-left">
+        <button id="back-btn" class="icon-btn hidden no-drag" title="Back">
+          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M10 3 L5 8 L10 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span id="status-dot" class="dot dot-gray"></span>
+        <span id="topbar-label" class="topbar-label">NO TIMER</span>
+      </div>
+      <div class="topbar-right no-drag">
+        <button id="settings-btn" class="icon-btn" title="Settings">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button id="min-btn" class="icon-btn" title="Minimize">
+          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 8 H13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <button id="close-btn" class="icon-btn" title="Close">
+          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4 L12 12 M12 4 L4 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Body (view container) -->
+    <div id="body" class="body">
+
+      <!-- Idle -->
+      <div id="view-idle" class="view view-idle">
+        <div class="idle-msg">No timer running</div>
+        <button id="start-job-btn" class="btn btn-primary">Start a job</button>
+      </div>
+
+      <!-- Running -->
+      <div id="view-running" class="view hidden">
+        <div id="job-name" class="job-name">—</div>
+        <div id="job-number" class="job-number">—</div>
+        <div class="time-row">
+          <span id="elapsed" class="elapsed">0:00</span>
+          <span id="today" class="today">Today: 0m</span>
+        </div>
+        <div class="btn-row">
+          <button id="stop-btn" class="btn btn-stop">
+            <svg viewBox="0 0 16 16" width="11" height="11"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg>
+            Stop
+          </button>
+          <button id="switch-btn" class="btn btn-switch">
+            <svg viewBox="0 0 16 16" width="12" height="12"><path d="M3 5 H12 M10 3 L12 5 L10 7 M13 11 H4 M6 9 L4 11 L6 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Switch
+          </button>
+        </div>
+      </div>
+
+      <!-- Picker -->
+      <div id="view-picker" class="view hidden">
+        <div class="seg-row no-drag">
+          <button id="seg-mine" class="seg active">Mine only</button>
+          <button id="seg-all" class="seg">All Priority jobs</button>
+        </div>
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 16 16" width="13" height="13"><circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 10 L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <input id="search" class="search no-drag" type="text" placeholder="Search jobs or paste 6-digit number" />
+        </div>
+        <div class="picker-list">
+          <div class="section-label" id="recent-label">RECENT</div>
+          <div id="recent-list"></div>
+          <div class="section-label" id="all-label">ALL ASSIGNED</div>
+          <div id="all-list"></div>
+          <div id="picker-empty" class="picker-empty hidden">No matching jobs</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Collapsed pill -->
+    <div id="view-pill" class="pill hidden">
+      <span id="pill-dot" class="dot dot-gray"></span>
+      <span id="pill-time" class="pill-time">0m</span>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden">
+      <span id="toast-text"></span>
+      <button id="toast-undo" class="toast-undo">Undo</button>
+    </div>
+
+    <!-- In-widget alert (safety nets) -->
+    <div id="alert" class="alert hidden">
+      <div id="alert-msg" class="alert-msg"></div>
+      <div id="alert-actions" class="alert-actions"></div>
+    </div>
+
+    <!-- Sync indicator -->
+    <div id="sync" class="sync hidden"></div>
+
+    <!-- Morning check-in modal -->
+    <div id="morning" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-title">Timer left running</div>
+        <div id="morning-msg" class="modal-msg"></div>
+        <button class="btn btn-primary modal-btn" data-choice="stop-yesterday">Stop it now (recommended)</button>
+        <button class="btn btn-switch modal-btn" data-choice="overnight">It was working overnight</button>
+        <button class="btn btn-ghost modal-btn" data-choice="discard">Discard the session</button>
+      </div>
+    </div>
+
+    <!-- First-run welcome -->
+    <div id="welcome" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-title">Compu-Mail Timer</div>
+        <div class="modal-msg">Track time locally and log finished sessions to your Monday board.</div>
+        <button class="btn btn-primary modal-btn" id="welcome-connect">Connect to Monday</button>
+        <button class="btn btn-switch modal-btn" id="welcome-demo">Try demo mode</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Harness is inert under Electron (preload already defined window.timerAPI);
+       in a plain browser it installs a mock bridge so the UI can be QA-tested. -->
+  <script src="harness.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

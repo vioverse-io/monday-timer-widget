@@ -1,0 +1,22 @@
+{
+  "name": "compumail-timer",
+  "version": "1.0.0",
+  "description": "Floating always-on-top desktop widget that tracks time locally and logs completed sessions to a Monday.com board.",
+  "main": "src/main.js",
+  "author": "Compu-Mail LLC",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  }
+}

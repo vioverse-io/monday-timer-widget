@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Settings</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Settings</h1>
+
+    <!-- Monday connection -->
+    <section>
+      <h2>Monday connection</h2>
+      <label class="field">
+        <span>API token</span>
+        <div class="token-row">
+          <input id="token" type="password" placeholder="Personal API token" autocomplete="off" />
+          <button id="token-toggle" type="button" class="mini-btn">Show</button>
+        </div>
+      </label>
+      <label class="field">
+        <span>Board ID</span>
+        <input id="boardId" type="text" placeholder="7833051194" />
+      </label>
+      <div class="row">
+        <button id="test-btn" class="btn btn-secondary" type="button">Test connection</button>
+        <span id="test-result" class="result"></span>
+      </div>
+    </section>
+
+    <!-- Picker scope -->
+    <section>
+      <h2>Picker scope</h2>
+      <p class="hint">Which groups to pull jobs from.</p>
+      <div id="groups" class="groups"><div class="hint">Loading groups…</div></div>
+    </section>
+
+    <!-- Hotkeys -->
+    <section>
+      <h2>Hotkeys</h2>
+      <label class="field">
+        <span>Stop timer</span>
+        <input id="hotkeyStop" class="hotkey" type="text" readonly placeholder="Click to record" value="" />
+      </label>
+      <label class="field">
+        <span>Show / hide widget (optional)</span>
+        <input id="hotkeyToggle" class="hotkey" type="text" readonly placeholder="Click to record" value="" />
+      </label>
+      <p class="hint">Click a field, then press the key combination. Default stop hotkey is Ctrl+Alt+T.</p>
+    </section>
+
+    <!-- Safety nets -->
+    <section>
+      <h2>Safety nets</h2>
+
+      <div class="safety">
+        <label class="toggle"><input id="idle-on" type="checkbox" /><span>Auto-stop when idle</span></label>
+        <div class="safety-detail">Stop after computer idle for
+          <input id="idle-min" type="number" min="1" max="120" class="num" /> minutes.</div>
+      </div>
+
+      <div class="safety">
+        <label class="toggle"><input id="eod-on" type="checkbox" /><span>End-of-day nudge</span></label>
+        <div class="safety-detail">Nudge at
+          <input id="eod-time" type="time" class="time" /> if a timer is still running.</div>
+      </div>
+
+      <div class="safety">
+        <label class="toggle"><input id="long-on" type="checkbox" /><span>Long session warning</span></label>
+        <div class="safety-detail">Warn after
+          <input id="long-hr" type="number" min="1" max="24" class="num" /> hours continuous.</div>
+      </div>
+
+      <div class="safety">
+        <label class="toggle"><input id="morning-on" type="checkbox" /><span>Morning check-in</span></label>
+        <div class="safety-detail">If a timer was left running overnight, ask what to do on launch.</div>
+      </div>
+    </section>
+
+    <!-- Startup + demo -->
+    <section>
+      <h2>Startup</h2>
+      <label class="toggle"><input id="startup-on" type="checkbox" /><span>Launch on Windows startup (hidden, in tray)</span></label>
+      <label class="toggle"><input id="demo-on" type="checkbox" /><span>Force demo mode (UI testing)</span></label>
+    </section>
+
+    <div class="footer">
+      <button id="cancel-btn" class="btn btn-ghost" type="button">Cancel</button>
+      <button id="save-btn" class="btn btn-primary" type="button">Save and start</button>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
