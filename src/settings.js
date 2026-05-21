@@ -35,6 +35,9 @@ const defaults = {
   // Startup
   launchOnStartup: false,
 
+  // Appearance: 'dark' | 'light' | 'auto' (follow Windows)
+  theme: 'dark',
+
   // Window position memory ({x, y} or null for default)
   windowPosition: null,
 

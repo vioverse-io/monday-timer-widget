@@ -9,12 +9,6 @@
 <body>
   <div id="app" class="app">
 
-    <!-- Demo-mode banner -->
-    <div id="banner" class="banner hidden">
-      <span>DEMO MODE</span>
-      <button id="banner-x" class="banner-x" title="Dismiss">×</button>
-    </div>
-
     <!-- Top bar (drag handle) -->
     <div id="topbar" class="topbar">
       <div class="topbar-left">
@@ -48,11 +42,13 @@
 
       <!-- Running -->
       <div id="view-running" class="view hidden">
-        <div id="job-name" class="job-name">—</div>
         <div id="job-number" class="job-number">—</div>
+        <div id="job-name" class="job-name">—</div>
         <div class="time-row">
           <span id="elapsed" class="elapsed">0:00</span>
-          <span id="today" class="today">Today: 0m</span>
+        </div>
+        <div class="totals">
+          <span id="today">Today 0m</span><span class="totals-sep"> · </span><span id="total">Total 0m</span>
         </div>
         <div class="btn-row">
           <button id="stop-btn" class="btn btn-stop">
@@ -74,7 +70,7 @@
         </div>
         <div class="search-wrap">
           <svg class="search-icon" viewBox="0 0 16 16" width="13" height="13"><circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 10 L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-          <input id="search" class="search no-drag" type="text" placeholder="Search jobs or paste 6-digit number" />
+          <input id="search" class="search no-drag" type="text" placeholder="Search jobs or paste a job number" />
         </div>
         <div class="picker-list">
           <div class="section-label" id="recent-label">RECENT</div>
@@ -86,6 +82,9 @@
       </div>
 
     </div>
+
+    <!-- Demo-mode footer label (shown only in demo mode) -->
+    <div id="demo-footer" class="demo-footer hidden">DEMO MODE</div>
 
     <!-- Collapsed pill (click to expand, drag to move) -->
     <div id="view-pill" class="pill hidden">

@@ -20,19 +20,20 @@
 
   const params = new URLSearchParams(location.search);
 
+  const H = 3600000;
   const MOCK_JOBS = [
-    { id: '1', name: 'Command HPP - Medicare Provider Termination - 111122', assignedToMe: true, todayMs: 5025000, lastSessionAt: Date.now() - 720000 },
-    { id: '2', name: 'Command Resi - Resi Daily - NYC Lead Inspections - 112300', assignedToMe: true, todayMs: 4320000, lastSessionAt: Date.now() - 2400000 },
-    { id: '3', name: 'Command VNS - Weekly Provider Term - 109437', assignedToMe: true, todayMs: 1320000, lastSessionAt: Date.now() - 5400000 },
-    { id: '4', name: '114041 - New Command Anthem Project', assignedToMe: true, todayMs: 0, lastSessionAt: Date.now() - 93600000 },
-    { id: '5', name: 'CarX - FTP data upload tests - 106536', assignedToMe: false, todayMs: 0, lastSessionAt: 0 },
-    { id: '6', name: '114079 new VNS Command Recert letter', assignedToMe: true, todayMs: 0, lastSessionAt: Date.now() - 108000000 },
-    { id: '7', name: '112905 - HCHB, AgeIn, Docusign', assignedToMe: true, todayMs: 39562000, lastSessionAt: Date.now() - 300000 },
-    { id: '8', name: '113035 Selective Inserting', assignedToMe: true, todayMs: 0, lastSessionAt: 0 },
-    { id: '9', name: 'AAA Reading Berks IMS Midnight Job Number 113471', assignedToMe: true, todayMs: 0, lastSessionAt: 0 },
-    { id: '10', name: 'Command HPP - New Medicaid and CHIP NDN/NOA - 113426', assignedToMe: true, todayMs: 0, lastSessionAt: 0 },
-    { id: '11', name: '113516 IMS Testing Northampton Schuylkill', assignedToMe: true, todayMs: 0, lastSessionAt: 0 },
-    { id: '12', name: 'CRM System Hoosier AAA Club Job Number 112616', assignedToMe: true, todayMs: 0, lastSessionAt: 0 }
+    { id: '1', name: 'Command HPP - Medicare Provider Termination - 111122', assignedToMe: true, todayMs: 5025000, totalMs: 5025000 + H * 9, lastSessionAt: Date.now() - 720000 },
+    { id: '2', name: 'Command Resi - Resi Daily - NYC Lead Inspections - 112300', assignedToMe: true, todayMs: 4320000, totalMs: 4320000 + H * 22, lastSessionAt: Date.now() - 2400000 },
+    { id: '3', name: 'Command VNS - Weekly Provider Term - 109437', assignedToMe: true, todayMs: 1320000, totalMs: 1320000 + H * 5, lastSessionAt: Date.now() - 5400000 },
+    { id: '4', name: '114041 - New Command Anthem Project', assignedToMe: true, todayMs: 0, totalMs: H * 2, lastSessionAt: Date.now() - 93600000 },
+    { id: '5', name: 'CarX - FTP data upload tests - 106536', assignedToMe: false, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
+    { id: '6', name: '114079 new VNS Command Recert letter', assignedToMe: true, todayMs: 0, totalMs: H + 1500000, lastSessionAt: Date.now() - 108000000 },
+    { id: '7', name: '112905 - HCHB, AgeIn, Docusign', assignedToMe: true, todayMs: 39562000, totalMs: 39562000 + H * 48, lastSessionAt: Date.now() - 300000 },
+    { id: '8', name: '113035 Selective Inserting', assignedToMe: true, todayMs: 0, totalMs: H * 3, lastSessionAt: 0 },
+    { id: '9', name: 'AAA Reading Berks IMS Midnight Job Number 113471', assignedToMe: true, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
+    { id: '10', name: 'Command HPP - New Medicaid and CHIP NDN/NOA - 113426', assignedToMe: true, todayMs: 0, totalMs: H * 6, lastSessionAt: 0 },
+    { id: '11', name: '113516 IMS Testing Northampton Schuylkill', assignedToMe: true, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
+    { id: '12', name: 'CRM System Hoosier AAA Club Job Number 112616', assignedToMe: true, todayMs: 0, totalMs: H * 4, lastSessionAt: 0 }
   ];
 
   const byId = {};
@@ -44,7 +45,9 @@
     itemName: null,
     startedAt: null,
     todayMsBase: 0,
+    totalMsBase: 0,
     previousJob: null,
+    theme: params.get('theme') || 'dark',
     bannerVisible: params.get('banner') !== '0',
     firstRun: params.get('welcome') === '1',
     recentIds: ['7', '1', '2', '3'],
@@ -64,9 +67,11 @@
       elapsedMs: elapsed,
       todayMs: T.todayMsBase + elapsed,
       todayMsBase: T.todayMsBase,
+      totalMsBase: T.totalMsBase,
       hasUndo: !!T.previousJob,
       demoMode: true,
       bannerVisible: T.bannerVisible,
+      theme: T.theme,
       firstRun: T.firstRun
     };
   }
@@ -76,6 +81,7 @@
     T.itemId = job.itemId;
     T.itemName = job.itemName;
     T.todayMsBase = byId[job.itemId]?.todayMs || 0;
+    T.totalMsBase = byId[job.itemId]?.totalMs || 0;
     T.startedAt = Date.now();
     pushRecent(job.itemId);
     emit('state', appState());
@@ -85,6 +91,7 @@
     T.running = false;
     T.itemId = T.itemName = T.startedAt = null;
     T.todayMsBase = 0;
+    T.totalMsBase = 0;
     emit('state', appState());
     return appState();
   }
@@ -144,7 +151,7 @@
 
   window.timerAPI = {
     getState: () => Promise.resolve(appState()),
-    getConfig: () => Promise.resolve({ demoMode: true, bannerVisible: T.bannerVisible, firstRun: T.firstRun }),
+    getConfig: () => Promise.resolve({ demoMode: true, bannerVisible: T.bannerVisible, theme: T.theme, firstRun: T.firstRun }),
     getJobs: (scope) => Promise.resolve(loadJobs(scope)),
     startJob: (j) => Promise.resolve(startJob(j)),
     stop: () => Promise.resolve(stop()),

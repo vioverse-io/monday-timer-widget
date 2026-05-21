@@ -22,6 +22,7 @@ class TimerEngine extends EventEmitter {
     this.itemName = null;
     this.startedAt = null;
     this.todayMsBase = 0; // ms already logged on this item today (from Monday/mock)
+    this.totalMsBase = 0; // ms already logged on this item all-time
   }
 
   isRunning() {
@@ -42,8 +43,9 @@ class TimerEngine extends EventEmitter {
       itemName: this.itemName,
       startedAt: this.startedAt,
       elapsedMs: this.getElapsed(),
-      // Today = already-logged today + live local elapsed.
-      todayMs: this.todayMsBase + this.getElapsed(),
+      // Bases are passed raw; the renderer computes the midnight-clipped "today".
+      todayMsBase: this.todayMsBase,
+      totalMsBase: this.totalMsBase,
       hasUndo: !!this.previousJob
     };
   }
@@ -55,7 +57,8 @@ class TimerEngine extends EventEmitter {
       itemId: this.itemId,
       itemName: this.itemName,
       startedAt: this.startedAt,
-      todayMsBase: this.todayMsBase
+      todayMsBase: this.todayMsBase,
+      totalMsBase: this.totalMsBase
     };
   }
 
@@ -80,6 +83,7 @@ class TimerEngine extends EventEmitter {
     this.itemId = job.itemId;
     this.itemName = job.itemName;
     this.todayMsBase = job.todayMsBase || 0;
+    this.totalMsBase = job.totalMsBase || 0;
     this.startedAt = job.startedAt || Date.now();
     this._startTicking();
     this.emit('change', this.getState());
@@ -116,7 +120,7 @@ class TimerEngine extends EventEmitter {
    */
   switchTo(job) {
     const previous = this.running
-      ? { itemId: this.itemId, itemName: this.itemName, todayMsBase: this.todayMsBase }
+      ? { itemId: this.itemId, itemName: this.itemName, todayMsBase: this.todayMsBase, totalMsBase: this.totalMsBase }
       : null;
     const completed = this.stop();
     this.start(job);
@@ -138,6 +142,7 @@ class TimerEngine extends EventEmitter {
       itemId: session.itemId,
       itemName: session.itemName,
       todayMsBase: session.todayMsBase || 0,
+      totalMsBase: session.totalMsBase || 0,
       startedAt: session.startedAt
     });
   }

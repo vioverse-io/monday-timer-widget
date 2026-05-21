@@ -60,36 +60,46 @@ async function gql(query, variables = {}) {
 
 // ---- Parsing helpers for real items ----
 
-function startOfToday() {
+function startOfLocalDay() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d.getTime();
 }
 
-// Tolerant parser: sums durations of time-tracking sessions that ended today.
-// Monday's exact session JSON shape varies; Step 0 confirms it. We defensively read
-// the common field names and fall back to 0 if the shape is unexpected.
-function parseTodayMs(timeTrackingValue) {
-  if (!timeTrackingValue) return 0;
+// Tolerant parser for the time-tracking column value. Returns:
+//   todayMs  — sum of each session's portion that falls within the LOCAL day (sessions
+//              that span midnight are clipped, so a 11:30pm→12:30am session adds only the
+//              part after midnight). Day boundary = the user's machine timezone (EST).
+//   totalMs  — all-time logged on the item (sum of all session durations).
+//   lastSessionAt — most recent session end (for Recent ordering).
+// Monday's exact session JSON shape varies; Step 0 confirms it. We read the common field
+// names defensively and fall back to zeros if the shape is unexpected.
+function parseTimeTracking(timeTrackingValue) {
+  const empty = { todayMs: 0, totalMs: 0, lastSessionAt: 0 };
+  if (!timeTrackingValue) return empty;
   let parsed;
   try {
     parsed = typeof timeTrackingValue === 'string' ? JSON.parse(timeTrackingValue) : timeTrackingValue;
   } catch {
-    return 0;
+    return empty;
   }
-  const records = parsed.additional_value || parsed.sessions || [];
-  const today = startOfToday();
+  const records = parsed.additional_value || parsed.history || parsed.sessions || [];
+  const dayStart = startOfLocalDay();
+  const dayEnd = dayStart + 86400000;
+  let today = 0;
   let total = 0;
   let last = 0;
   for (const r of records) {
     const start = Date.parse(r.started_at || r.start || 0);
     const end = Date.parse(r.ended_at || r.end || 0);
-    if (!isNaN(end)) last = Math.max(last, end);
-    if (!isNaN(start) && !isNaN(end) && end >= today) {
-      total += Math.max(0, end - start);
-    }
+    if (isNaN(start) || isNaN(end) || end <= start) continue; // skip running/invalid
+    total += end - start;
+    last = Math.max(last, end);
+    const cs = Math.max(start, dayStart);
+    const ce = Math.min(end, dayEnd);
+    if (ce > cs) today += ce - cs;
   }
-  return { todayMs: total, lastSessionAt: last };
+  return { todayMs: today, totalMs: total, lastSessionAt: last };
 }
 
 function parseAssignees(peopleValue) {
@@ -164,12 +174,13 @@ async function getItems(groupIds, currentUserId) {
         ? it.column_values.find((c) => c.id === timeTrackingColumnId)
         : it.column_values.find((c) => c.type === 'time_tracking');
       const assignees = parseAssignees(peopleCol?.value);
-      const { todayMs, lastSessionAt } = parseTodayMs(ttCol?.value) || { todayMs: 0, lastSessionAt: 0 };
+      const { todayMs, totalMs, lastSessionAt } = parseTimeTracking(ttCol?.value);
       items.push({
         id: it.id,
         name: it.name,
         assignedToMe: currentUserId ? assignees.includes(String(currentUserId)) : false,
         todayMs,
+        totalMs,
         lastSessionAt
       });
     }

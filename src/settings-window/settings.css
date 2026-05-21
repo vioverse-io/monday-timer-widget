@@ -33,7 +33,7 @@ section {
 .field { display: block; margin-bottom: 10px; }
 .field > span { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
 
-input[type="text"], input[type="password"], input[type="time"], input[type="number"] {
+input[type="text"], input[type="password"], input[type="time"], input[type="number"], select.select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -43,6 +43,7 @@ input[type="text"], input[type="password"], input[type="time"], input[type="numb
   padding: 7px 9px;
   outline: none;
 }
+select.select { width: 100%; cursor: pointer; }
 input:focus { border-color: var(--accent-blue); }
 input[type="text"], input[type="password"] { width: 100%; }
 .num { width: 56px; }
@@ -90,3 +91,15 @@ input[type="checkbox"] { accent-color: var(--accent-blue); }
 .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-strong); }
 .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
 .footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+
+/* ---- Light theme overrides ---- */
+:root[data-theme="light"] {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F6F8;
+  --bg-tertiary: #EDF0F4;
+  --border: #E1E4EA;
+  --border-strong: #CED2DA;
+  --text-primary: #1F2A40;
+  --text-secondary: #676879;
+  --text-tertiary: #9699A6;
+}

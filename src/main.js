@@ -3,7 +3,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain,
-  Notification, nativeImage, screen
+  Notification, nativeImage, screen, nativeTheme
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -88,13 +88,32 @@ function refreshMode() {
 // ---------------------------------------------------------------------------
 // State broadcast
 // ---------------------------------------------------------------------------
+// Effective theme: 'dark' | 'light' (resolving 'auto' against the OS).
+function effectiveTheme() {
+  const t = settings.get('theme') || 'dark';
+  if (t === 'auto') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  return t;
+}
+function themeBg(theme) {
+  return theme === 'light' ? '#FFFFFF' : '#1F2A40';
+}
+function applyThemeToWindows() {
+  const bg = themeBg(effectiveTheme());
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(bg);
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.setBackgroundColor(bg);
+  pushState(); // renderer applies data-theme from state.theme
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('theme', effectiveTheme());
+}
+
 function appState() {
   const s = timer.getState();
   return {
     ...s,
     todayMsBase: timer.todayMsBase,
+    totalMsBase: timer.totalMsBase,
     demoMode,
     bannerVisible,
+    theme: effectiveTheme(),
     firstRun: !settings.get('setupComplete')
   };
 }
@@ -177,7 +196,7 @@ function createMainWindow() {
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
-    backgroundColor: '#1F2A40',
+    backgroundColor: themeBg(effectiveTheme()),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -361,8 +380,8 @@ function startOrSwitch(job) {
 }
 
 function startJob(jobInput) {
-  const todayMsBase = jobsCache.byId[jobInput.itemId]?.todayMs || 0;
-  timer.start({ itemId: jobInput.itemId, itemName: jobInput.itemName, todayMsBase });
+  const j = jobsCache.byId[jobInput.itemId] || {};
+  timer.start({ itemId: jobInput.itemId, itemName: jobInput.itemName, todayMsBase: j.todayMs || 0, totalMsBase: j.totalMs || 0 });
   settings.pushRecent(jobInput.itemId);
   persistRunning();
   setTrayState('running');
@@ -385,11 +404,12 @@ function stopAndLog(endedAt) {
 }
 
 function switchAndLog(jobInput) {
-  const todayMsBase = jobsCache.byId[jobInput.itemId]?.todayMs || 0;
+  const j = jobsCache.byId[jobInput.itemId] || {};
   const { completed } = timer.switchTo({
     itemId: jobInput.itemId,
     itemName: jobInput.itemName,
-    todayMsBase
+    todayMsBase: j.todayMs || 0,
+    totalMsBase: j.totalMs || 0
   });
   if (completed) {
     settings.pushRecent(completed.itemId);
@@ -540,7 +560,7 @@ function openSettingsWindow() {
     resizable: true,
     frame: true,
     title: 'Compu-Mail Timer — settings',
-    backgroundColor: '#1F2A40',
+    backgroundColor: themeBg(effectiveTheme()),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -629,6 +649,7 @@ function registerIpc() {
       hotkeyToggle: all.hotkeyToggle,
       safety: all.safety,
       launchOnStartup: all.launchOnStartup,
+      theme: all.theme || 'dark',
       demoMode
     };
   });
@@ -650,9 +671,11 @@ function registerIpc() {
     if (payload.hotkeyToggle !== undefined) settings.set('hotkeyToggle', payload.hotkeyToggle);
     if (payload.safety !== undefined) settings.set('safety', payload.safety);
     if (payload.launchOnStartup !== undefined) settings.set('launchOnStartup', payload.launchOnStartup);
+    if (payload.theme !== undefined) settings.set('theme', payload.theme);
     settings.set('setupComplete', true);
 
     refreshMode();
+    applyThemeToWindows();
     // Switching into demo clears any real running session to avoid confusion.
     if (!wasDemo && demoMode && timer.isRunning()) {
       timer.discard();
@@ -706,6 +729,11 @@ if (!gotLock) {
     // Wire timer engine to tray + persistence.
     timer.on('change', () => { updateTrayTooltip(); persistRunning(); });
     timer.on('tick', () => { updateTrayTooltip(); persistRunning(); });
+
+    // Follow the OS light/dark setting when theme is 'auto'.
+    nativeTheme.on('updated', () => {
+      if ((settings.get('theme') || 'dark') === 'auto') applyThemeToWindows();
+    });
 
     handleStartupSession();
     safetyNets.start();

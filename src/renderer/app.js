@@ -36,13 +36,52 @@
     const m = Math.floor((t % 3600) / 60);
     return h > 0 ? `${h}h${m}m` : `${m}m`;
   }
+  // Best-effort job-number detection. Board names vary (6/5/3-digit, #-prefixed,
+  // "Job Number ###", leading/trailing/embedded). Priority: after #/Job/Job Number,
+  // then a trailing number, then the longest 3–7 digit run. To be validated in Step 0.
   function jobNum(name) {
-    const matches = String(name || '').match(/\d{6}/g);
-    return matches ? matches[matches.length - 1] : '';
+    const s = String(name || '');
+    let m = s.match(/(?:job\s*(?:number)?\s*#?\s*|#)\s*(\d{3,7})\b/i);
+    if (m) return m[1];
+    m = s.match(/(\d{3,7})\s*$/);
+    if (m) return m[1];
+    const runs = s.match(/\d{3,7}/g);
+    if (runs) return runs.slice().sort((a, b) => b.length - a.length)[0];
+    return '';
   }
-  function jobNumberLabel(name) {
+  // Description with the job number (and trailing "job number"/# words) stripped out,
+  // since the number is shown separately above the name.
+  function cleanName(name) {
+    if (!name) return '—';
     const n = jobNum(name);
-    return n ? `Job ${n}` : 'No job number';
+    let s = name;
+    if (n) s = s.split(n).join(' ');
+    s = s
+      .replace(/\s+/g, ' ')
+      .replace(/[\s\-–·#]+$/, '')
+      .replace(/^[\s\-–·#]+/, '')
+      .replace(/\b(job\s*number|job|number|#)\b\s*$/i, '')
+      .replace(/[\s\-–·#]+$/, '')
+      .trim();
+    return s || name;
+  }
+
+  // Renders the running view's number (big, green) + description. When a number is
+  // found it's shown big/green and stripped from the description; when none is found,
+  // the number line is hidden and the full name is shown as the title.
+  function renderJob(name) {
+    const n = jobNum(name);
+    const numEl = $('job-number');
+    if (n) {
+      numEl.textContent = n;
+      numEl.classList.remove('hidden');
+      $('job-name').textContent = cleanName(name);
+    } else {
+      numEl.textContent = '';
+      numEl.classList.add('hidden');
+      $('job-name').textContent = name || '—';
+    }
+    $('job-name').title = name || '';
   }
   function shortName(name) {
     if (!name) return 'this job';
@@ -61,8 +100,8 @@
     $('body').classList.toggle('hidden', isPill);
     $('app').classList.toggle('is-pill', isPill);
     $('resize-grip').classList.toggle('hidden', isPill);
-    // The demo banner is hidden in the collapsed pill (it would eat the 40px height).
-    $('banner').classList.toggle('hidden', isPill || !state.bannerVisible);
+    // Demo footer shows in any full view while in demo mode; hidden in the pill.
+    $('demo-footer').classList.toggle('hidden', isPill || !state.demoMode);
 
     const isPicker = name === 'picker';
     $('back-btn').classList.toggle('hidden', !isPicker);
@@ -92,25 +131,36 @@
     if (tickInterval) clearInterval(tickInterval);
     tickInterval = null;
   }
+  function startOfLocalDay() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
   function renderTime() {
     if (!state.running || !state.startedAt) return;
-    const elapsed = Date.now() - state.startedAt;
+    const now = Date.now();
+    const elapsed = now - state.startedAt;
+    // Today = already-logged today + the running session's portion since local midnight
+    // (so a session spanning midnight only adds the part that falls in today).
+    const sinceMidnight = now - Math.max(state.startedAt, startOfLocalDay());
+    const today = (state.todayMsBase || 0) + Math.max(0, sinceMidnight);
+    const total = (state.totalMsBase || 0) + elapsed;
     $('elapsed').textContent = fmtClock(elapsed);
-    $('today').textContent = 'Today: ' + fmtToday((state.todayMsBase || 0) + elapsed);
+    $('today').textContent = 'Today ' + fmtToday(today);
+    $('total').textContent = 'Total ' + fmtToday(total);
     $('pill-time').textContent = fmtPill(elapsed);
   }
 
   // ---- state ----
   function applyState(s) {
     state = s;
-    $('banner').classList.toggle('hidden', !s.bannerVisible);
+    if (s.theme) document.documentElement.dataset.theme = s.theme;
+    $('demo-footer').classList.toggle('hidden', !s.demoMode);
     $('welcome').classList.toggle('hidden', !s.firstRun);
     setDot(s.running);
 
     if (s.running) {
-      $('job-name').textContent = s.itemName || '—';
-      $('job-name').title = s.itemName || '';
-      $('job-number').textContent = jobNumberLabel(s.itemName);
+      renderJob(s.itemName);
     }
 
     // Auto view transition only when on a base view (don't yank user out of picker/pill).
@@ -141,18 +191,36 @@
   function rowEl(job) {
     const row = document.createElement('div');
     row.className = 'job-row';
+    // The currently-running job is highlighted green (number + arrow).
+    if (state.running && job.id === state.itemId) row.classList.add('active');
+
     const main = document.createElement('div');
     main.className = 'job-row-main';
+
+    // Line 1: number first (green when active), then " — description" (number stripped).
     const name = document.createElement('div');
     name.className = 'job-row-name';
-    name.textContent = job.name;
+    const n = jobNum(job.name);
+    const desc = cleanName(job.name);
+    if (n) {
+      const num = document.createElement('span');
+      num.className = 'job-row-num';
+      num.textContent = n;
+      name.appendChild(num);
+      name.appendChild(document.createTextNode(' — ' + desc));
+    } else {
+      name.appendChild(document.createTextNode(desc));
+    }
     name.title = job.name;
+
+    // Line 2: time only (no duplicate number).
     const sub = document.createElement('div');
     sub.className = 'job-row-sub';
-    const n = jobNum(job.name);
-    sub.textContent = `${n || '—'} · ${fmtToday(job.todayMs || 0)} today`;
+    sub.textContent = `${fmtToday(job.todayMs || 0)} today`;
+
     main.appendChild(name);
     main.appendChild(sub);
+
     const play = document.createElement('span');
     play.className = 'job-row-play';
     play.innerHTML =
@@ -183,6 +251,11 @@
   }
 
   async function pickJob(job) {
+    // Clicking the already-active job just returns to the timer (no redundant switch).
+    if (state.running && job.id === state.itemId) {
+      setView('running');
+      return;
+    }
     if (pickerMode === 'switch' && state.running) {
       const s = await api.switchJob({ itemId: job.id, itemName: job.name });
       applyAfterAction(s);
@@ -198,8 +271,7 @@
       state = s;
       setDot(s.running);
       if (s.running) {
-        $('job-name').textContent = s.itemName || '—';
-        $('job-number').textContent = jobNumberLabel(s.itemName);
+        renderJob(s.itemName);
         startTick();
       } else {
         stopTick();
@@ -309,10 +381,6 @@
     $('min-btn').addEventListener('click', () => setView('pill'));
     $('close-btn').addEventListener('click', () => api.hideWidget());
     $('back-btn').addEventListener('click', closePicker);
-    $('banner-x').addEventListener('click', () => {
-      api.dismissBanner();
-      $('banner').classList.add('hidden');
-    });
 
     $('start-job-btn').addEventListener('click', () => openPicker('start'));
     $('switch-btn').addEventListener('click', () => openPicker('switch'));

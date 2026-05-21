@@ -14,7 +14,7 @@
         longSession: { enabled: true, hours: 4 },
         morningCheckin: { enabled: true }
       },
-      launchOnStartup: false, demoMode: true
+      launchOnStartup: false, theme: 'dark', demoMode: true
     }),
     save: (p) => { console.log('save', p); return Promise.resolve({ ok: true }); },
     test: () => Promise.resolve({ ok: false, error: 'Electron only' }),
@@ -29,6 +29,15 @@
 
   function friendly(accel) {
     return (accel || '').replace('CommandOrControl', 'Ctrl').replace('Super', 'Win');
+  }
+
+  // Apply a theme to this window. 'auto' resolves against the OS preference.
+  function applyTheme(theme) {
+    let eff = theme;
+    if (theme === 'auto') {
+      eff = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.dataset.theme = eff;
   }
 
   function renderGroups(groups) {
@@ -116,6 +125,9 @@
     $('startup-on').checked = !!s.launchOnStartup;
     $('demo-on').checked = !!s.forceDemoMode;
 
+    $('theme').value = s.theme || 'dark';
+    applyTheme(s.theme || 'dark');
+
     const groups = await api.getGroups({ token: s.apiToken, boardId: s.boardId });
     renderGroups(groups);
   }
@@ -134,7 +146,8 @@
         longSession: { enabled: $('long-on').checked, hours: Number($('long-hr').value) || 4 },
         morningCheckin: { enabled: $('morning-on').checked }
       },
-      launchOnStartup: $('startup-on').checked
+      launchOnStartup: $('startup-on').checked,
+      theme: $('theme').value
     };
   }
 
@@ -163,6 +176,9 @@
 
     $('hotkeyStop').addEventListener('click', () => recordHotkey($('hotkeyStop')));
     $('hotkeyToggle').addEventListener('click', () => recordHotkey($('hotkeyToggle')));
+
+    // Live-preview the theme as the user changes it.
+    $('theme').addEventListener('change', () => applyTheme($('theme').value));
 
     $('save-btn').addEventListener('click', async () => {
       await api.save(gather());
