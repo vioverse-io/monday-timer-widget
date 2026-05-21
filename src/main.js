@@ -146,6 +146,7 @@ function createMainWindow() {
     height: SIZES.idle.h,
     x: pos.x,
     y: pos.y,
+    useContentSize: true,
     frame: false,
     transparent: false,
     resizable: false,
@@ -178,7 +179,14 @@ function resizeForView(view) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const size = SIZES[view] || SIZES.idle;
   if (view !== 'pill') lastFullView = view;
-  mainWindow.setSize(size.w, size.h);
+  // setContentSize/setSize is ignored or one-directional (won't shrink) while a window
+  // is non-resizable on Windows — so the window grows when opening the picker but never
+  // returns, leaving later views (esp. the pill) stranded in an oversized frame. Toggle
+  // resizable around the call so the size always takes, then re-lock it.
+  const wasResizable = mainWindow.isResizable();
+  mainWindow.setResizable(true);
+  mainWindow.setContentSize(size.w, size.h);
+  mainWindow.setResizable(wasResizable);
 }
 
 function showWidget() {
@@ -675,6 +683,7 @@ if (!gotLock) {
     log(`started (demoMode=${demoMode})`);
 
     if (process.env.SMOKE_TEST) runSmokeTest();
+    if (process.env.CAPTURE) runCapture();
   });
 
   app.on('window-all-closed', (e) => {
@@ -685,6 +694,46 @@ if (!gotLock) {
     app.isQuitting = true;
     persistRunning();
     globalShortcut.unregisterAll();
+  });
+}
+
+// Visual capture (CAPTURE=1): renders real states to /tmp PNGs and logs the
+// content/window size after each resizeForView, to diagnose the size/view mismatch.
+function runCapture() {
+  mainWindow.webContents.once('did-finish-load', async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const grab = async (name) => {
+      await wait(600);
+      const img = await mainWindow.webContents.capturePage();
+      fs.writeFileSync(`/tmp/${name}`, img.toPNG());
+      console.log(`CAP ${name} content=${JSON.stringify(mainWindow.getContentSize())} win=${JSON.stringify(mainWindow.getSize())}`);
+    };
+    showWidget();
+    settings.set('setupComplete', true); // skip welcome overlay for capture
+    bannerVisible = false;
+    pushState();
+    await grab('cap-1-idle.png');
+
+    console.log('CAP resize probe — initial content=' + JSON.stringify(mainWindow.getContentSize()));
+    resizeForView('picker'); await wait(150);
+    console.log('CAP after setSize(picker 340x320) content=' + JSON.stringify(mainWindow.getContentSize()));
+    resizeForView('pill'); await wait(150);
+    console.log('CAP after setSize(pill 120x40) content=' + JSON.stringify(mainWindow.getContentSize()));
+    resizeForView('idle'); await wait(150);
+    console.log('CAP after setSize(idle 340x220) content=' + JSON.stringify(mainWindow.getContentSize()));
+
+    startJob({ itemId: '1', itemName: 'Command HPP - Medicare Provider Termination - 111122' });
+    await grab('cap-2-running.png');
+
+    // Simulate the user opening the picker (grow) then minimizing to the pill (shrink).
+    mainWindow.webContents.send('set-view', 'picker'); // openPicker in renderer
+    await grab('cap-3-picker.png');
+    await mainWindow.webContents.executeJavaScript("document.getElementById('min-btn').click()");
+    await grab('cap-4-pill.png');
+    console.log('CAP pill content=' + JSON.stringify(mainWindow.getContentSize()));
+
+    app.isQuitting = true;
+    setTimeout(() => app.quit(), 200);
   });
 }
 
