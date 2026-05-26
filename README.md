@@ -9,7 +9,7 @@ visible at all times and makes switching jobs a one-click action.
 Monday's API **cannot** write to the time-tracking column (mutations blank it). The
 widget owns the clock on the user's machine. When a session ends (stop, switch,
 auto-stop, etc.) it posts a **comment (Update)** on the Monday item with the duration
-and start/end times, e.g.: "Time logged: 1h 30m — 2:00 PM to 3:30 PM, May 25".
+and start/end times in a clean multi-line format (duration, start, end, date).
 
 ## Status
 
@@ -56,7 +56,7 @@ Deep-link any state for screenshots:
 ## Build the Windows installer
 
 ```bash
-npm run dist     # → dist/CompuMailTimer-Setup-1.0.0.exe
+npm run dist     # → dist/CompuMailTimer-Setup-<version>.exe
 ```
 
 Building a Windows `.exe` from WSL2 may require `wine`. If `npm run dist` fails on

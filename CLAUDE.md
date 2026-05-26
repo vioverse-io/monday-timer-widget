@@ -13,7 +13,7 @@ Always `cd` into this folder first so Claude can see the files.
   ```
 
 This is separate from the `vio` shortcut (that one goes to ~/isolated-test-area for
-Vioverse). This project lives at `vioverse-io/monday-timer-widget` on GitHub (private).
+Vioverse). This project lives at `vioverse-io/monday-timer-widget` on GitHub (public).
 
 ## What this is
 A frameless, always-on-top Windows Electron widget that tracks time locally and logs
