@@ -21,8 +21,9 @@ class TimerEngine extends EventEmitter {
     this.itemId = null;
     this.itemName = null;
     this.startedAt = null;
-    this.todayMsBase = 0; // ms already logged on this item today (from Monday/mock)
-    this.totalMsBase = 0; // ms already logged on this item all-time
+    this.todayMsBase = 0; // ms already logged on this item today (local)
+    this.totalMsBase = 0; // ms already logged (delta since last export-and-clear)
+    this.subtractedMs = 0; // distraction recovery: ms removed from this session
   }
 
   isRunning() {
@@ -32,7 +33,7 @@ class TimerEngine extends EventEmitter {
   /** Elapsed ms of the currently running local session (0 if idle). */
   getElapsed() {
     if (!this.running || !this.startedAt) return 0;
-    return Date.now() - this.startedAt;
+    return Math.max(0, Date.now() - this.startedAt - this.subtractedMs);
   }
 
   /** Snapshot for the renderer / persistence. */
@@ -43,6 +44,7 @@ class TimerEngine extends EventEmitter {
       itemName: this.itemName,
       startedAt: this.startedAt,
       elapsedMs: this.getElapsed(),
+      subtractedMs: this.subtractedMs,
       // Bases are passed raw; the renderer computes the midnight-clipped "today".
       todayMsBase: this.todayMsBase,
       totalMsBase: this.totalMsBase,
@@ -58,7 +60,8 @@ class TimerEngine extends EventEmitter {
       itemName: this.itemName,
       startedAt: this.startedAt,
       todayMsBase: this.todayMsBase,
-      totalMsBase: this.totalMsBase
+      totalMsBase: this.totalMsBase,
+      subtractedMs: this.subtractedMs
     };
   }
 
@@ -85,6 +88,7 @@ class TimerEngine extends EventEmitter {
     this.todayMsBase = job.todayMsBase || 0;
     this.totalMsBase = job.totalMsBase || 0;
     this.startedAt = job.startedAt || Date.now();
+    this.subtractedMs = job.subtractedMs || 0;
     this._startTicking();
     this.emit('change', this.getState());
     this.emit('started', this.getState());
@@ -104,7 +108,7 @@ class TimerEngine extends EventEmitter {
       itemName: this.itemName,
       startedAt: this.startedAt,
       endedAt: end,
-      durationMs: Math.max(0, end - this.startedAt)
+      durationMs: Math.max(0, end - this.startedAt - this.subtractedMs)
     };
     this._stopTicking();
     this._reset();
@@ -135,6 +139,19 @@ class TimerEngine extends EventEmitter {
     this.emit('change', this.getState());
   }
 
+  /**
+   * Subtract ms from the running session (distraction recovery).
+   * Capped so elapsed never goes below zero. Returns the updated state.
+   */
+  subtractTime(ms) {
+    if (!this.running || ms <= 0) return this.getState();
+    const raw = Date.now() - this.startedAt - this.subtractedMs;
+    const maxSubtract = Math.max(0, raw);
+    this.subtractedMs += Math.min(ms, maxSubtract);
+    this.emit('change', this.getState());
+    return this.getState();
+  }
+
   /** Restore a persisted running session (same-day resume after restart). */
   resume(session) {
     if (!session) return null;
@@ -143,7 +160,8 @@ class TimerEngine extends EventEmitter {
       itemName: session.itemName,
       todayMsBase: session.todayMsBase || 0,
       totalMsBase: session.totalMsBase || 0,
-      startedAt: session.startedAt
+      startedAt: session.startedAt,
+      subtractedMs: session.subtractedMs || 0
     });
   }
 

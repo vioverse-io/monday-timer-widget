@@ -52,6 +52,7 @@
     startedAt: null,
     todayMsBase: 0,
     totalMsBase: 0,
+    subtractedMs: 0,
     previousJob: null,
     theme: params.get('theme') || 'dark',
     bannerVisible: params.get('banner') !== '0',
@@ -60,17 +61,25 @@
     retryCount: Number(params.get('sync') || 0)
   };
 
+  // Per-job local timers (mirrors settings.jobTimers)
+  const jobTimers = {}
+  function getJT(id) {
+    if (!jobTimers[id]) jobTimers[id] = { totalMs: 0, deltaMs: 0, exportCount: 0, todayMs: 0, todayDate: null };
+    return jobTimers[id];
+  }
+
   const listeners = { state: [], jobs: [], toast: [], alert: [], morning: [], sync: [], view: [] };
   const emit = (ch, p) => listeners[ch].forEach((cb) => cb(p));
 
   function appState() {
-    const elapsed = T.running ? Date.now() - T.startedAt : 0;
+    const elapsed = T.running ? Math.max(0, Date.now() - T.startedAt - T.subtractedMs) : 0;
     return {
       running: T.running,
       itemId: T.itemId,
       itemName: T.itemName,
       startedAt: T.startedAt,
       elapsedMs: elapsed,
+      subtractedMs: T.subtractedMs,
       todayMs: T.todayMsBase + elapsed,
       todayMsBase: T.todayMsBase,
       totalMsBase: T.totalMsBase,
@@ -86,18 +95,31 @@
     T.running = true;
     T.itemId = job.itemId;
     T.itemName = job.itemName;
-    T.todayMsBase = byId[job.itemId]?.todayMs || 0;
-    T.totalMsBase = byId[job.itemId]?.totalMs || 0;
+    const jt = getJT(job.itemId);
+    const today = new Date().toDateString();
+    T.todayMsBase = jt.todayDate === today ? jt.todayMs : 0;
+    T.totalMsBase = jt.deltaMs;
+    T.subtractedMs = 0;
     T.startedAt = Date.now();
     pushRecent(job.itemId);
     emit('state', appState());
     return appState();
   }
   function stop() {
+    if (T.running && T.itemId) {
+      const dur = Math.max(0, Date.now() - T.startedAt - T.subtractedMs);
+      const jt = getJT(T.itemId);
+      jt.totalMs += dur;
+      jt.deltaMs += dur;
+      const today = new Date().toDateString();
+      if (jt.todayDate === today) jt.todayMs += dur;
+      else { jt.todayDate = today; jt.todayMs = dur; }
+    }
     T.running = false;
     T.itemId = T.itemName = T.startedAt = null;
     T.todayMsBase = 0;
     T.totalMsBase = 0;
+    T.subtractedMs = 0;
     emit('state', appState());
     return appState();
   }
@@ -133,7 +155,15 @@
       if (da !== db) return da - db;
       return a.name.localeCompare(b.name);
     });
-    return { all: sorted, groups: MOCK_GROUPS };
+    // Merge local timer data
+    for (const j of sorted) {
+      const jt = getJT(j.id);
+      j.localDeltaMs = jt.deltaMs;
+      j.localTotalMs = jt.totalMs;
+      j.localExportCount = jt.exportCount;
+    }
+    const recents = T.recentIds.slice(0, 5).map((id) => byId[id]).filter(Boolean);
+    return { all: sorted, recents, groups: MOCK_GROUPS };
   }
 
   function fireAlert(kind) {
@@ -154,6 +184,40 @@
     switchJob: (j) => Promise.resolve(switchJob(j)),
     undoSwitch: () => Promise.resolve(undoSwitch()),
     morningChoice: () => { return Promise.resolve(stop()); },
+    subtractTime: (ms) => {
+      if (!T.running) return Promise.resolve(appState());
+      const raw = Date.now() - T.startedAt - T.subtractedMs;
+      T.subtractedMs += Math.min(ms, Math.max(0, raw));
+      emit('state', appState());
+      return Promise.resolve(appState());
+    },
+    getExportInfo: (itemId) => {
+      const jt = getJT(itemId);
+      let runningMs = 0;
+      if (T.running && T.itemId === itemId) runningMs = Math.max(0, Date.now() - T.startedAt - T.subtractedMs);
+      return Promise.resolve({ deltaMs: jt.deltaMs + runningMs, totalMs: jt.totalMs + runningMs, exportCount: jt.exportCount });
+    },
+    exportAll: (itemId) => {
+      const jt = getJT(itemId);
+      jt.exportCount += 1;
+      return Promise.resolve({ ok: true, exportId: jt.exportCount, durationMs: jt.totalMs });
+    },
+    exportAndClear: (itemId, note) => {
+      const jt = getJT(itemId);
+      jt.exportCount += 1;
+      const dur = jt.deltaMs;
+      jt.deltaMs = 0;
+      jt.todayMs = 0;
+      jt.todayDate = new Date().toDateString();
+      if (T.running && T.itemId === itemId) {
+        T.startedAt = Date.now();
+        T.subtractedMs = 0;
+        T.todayMsBase = 0;
+        T.totalMsBase = 0;
+        emit('state', appState());
+      }
+      return Promise.resolve({ ok: true, exportId: jt.exportCount, durationMs: dur });
+    },
     viewChanged: () => {},
     collapse: () => {},
     expand: () => {},

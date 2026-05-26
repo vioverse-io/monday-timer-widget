@@ -54,7 +54,11 @@ const defaults = {
   recentItemIds: [],
 
   // EOD nudge bookkeeping (ISO date string of the day it was last dismissed)
-  eodDismissedDate: null
+  eodDismissedDate: null,
+
+  // Per-job local time accumulation (keyed by Monday item id).
+  // Each entry: { totalMs, deltaMs, exportCount, todayMs, todayDate }
+  jobTimers: {}
 };
 
 const store = new Store({ name: 'compumail-timer', defaults });
@@ -119,6 +123,19 @@ function pushRecent(itemId) {
   store.set('recentItemIds', list.slice(0, 20));
 }
 
+// ---- Per-job timer helpers ----
+
+function getJobTimer(itemId) {
+  const all = store.get('jobTimers') || {};
+  return all[itemId] || { totalMs: 0, deltaMs: 0, exportCount: 0, todayMs: 0, todayDate: null };
+}
+
+function setJobTimer(itemId, data) {
+  const all = store.get('jobTimers') || {};
+  all[itemId] = data;
+  store.set('jobTimers', all);
+}
+
 module.exports = {
   store,
   get,
@@ -128,5 +145,7 @@ module.exports = {
   getToken,
   hasToken,
   pushRecent,
+  getJobTimer,
+  setJobTimer,
   DEFAULT_BOARD_ID
 };

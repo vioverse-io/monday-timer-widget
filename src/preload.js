@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('timerAPI', {
   switchJob: (job) => ipcRenderer.invoke('switch-job', job),
   undoSwitch: () => ipcRenderer.invoke('undo-switch'),
   morningChoice: (choice) => ipcRenderer.invoke('morning-choice', choice),
+  subtractTime: (ms) => ipcRenderer.invoke('subtract-time', { ms }),
+  getExportInfo: (itemId) => ipcRenderer.invoke('get-export-info', itemId),
+  exportAll: (itemId) => ipcRenderer.invoke('export-all', itemId),
+  exportAndClear: (itemId, note) => ipcRenderer.invoke('export-and-clear', { itemId, note }),
 
   // ---- fire-and-forget ----
   viewChanged: (view) => ipcRenderer.send('view-changed', view),

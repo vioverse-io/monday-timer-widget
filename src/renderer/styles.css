@@ -111,6 +111,7 @@ html, body {
   height: 100%;
 }
 .idle-msg { font-size: 14px; color: var(--text-secondary); }
+.idle-recents-wrap { width: 100%; }
 .idle-recents { width: 100%; }
 .idle-recent-row {
   display: flex;
@@ -419,6 +420,97 @@ html, body {
 .modal-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .modal-msg { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.4; }
 .modal-btn { width: 100%; }
+
+/* ---- Distraction recovery ---- */
+.distract-row { margin-top: 4px; }
+.btn-distract {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 8px;
+  min-height: 24px;
+  color: var(--text-secondary);
+}
+.distract-flash {
+  position: absolute;
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: "SF Mono", "Cascadia Mono", "Consolas", monospace;
+  color: var(--accent-red);
+  pointer-events: none;
+  animation: flash-fade 1s ease-out forwards;
+}
+@keyframes flash-fade {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.elapsed-flash { color: var(--accent-red) !important; transition: color 0.15s; }
+
+/* ---- Filter row with refresh ---- */
+.filter-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.filter-row-wrap .filter-row { flex: 1; margin-bottom: 0; }
+.refresh-btn { flex-shrink: 0; }
+.refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Export menu popover ---- */
+.export-menu {
+  position: absolute;
+  z-index: 25;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 140px;
+}
+.export-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.export-menu-item:hover { background: var(--bg-tertiary); }
+
+/* ---- Export button on job rows ---- */
+.job-row-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  -webkit-app-region: no-drag;
+  padding: 0;
+}
+.job-row-export svg { pointer-events: none; }
+.job-row:hover .job-row-export { opacity: 1; }
+.job-row-export:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
 
 /* ---- Light theme (Monday-like): overrides the dark defaults ---- */
 :root[data-theme="light"] {

@@ -14,6 +14,7 @@
   let jobs = { all: [], groups: [] };
   let tickInterval = null;
   let toastTimer = null;
+  let exportMenuTarget = null;  // itemId for the currently open export menu
 
   // ---- formatters ----
   const pad = (n) => String(n).padStart(2, '0');
@@ -139,11 +140,14 @@
   function renderTime() {
     if (!state.running || !state.startedAt) return;
     const now = Date.now();
-    const elapsed = now - state.startedAt;
-    // Today = already-logged today + the running session's portion since local midnight
-    // (so a session spanning midnight only adds the part that falls in today).
-    const sinceMidnight = now - Math.max(state.startedAt, startOfLocalDay());
-    const today = (state.todayMsBase || 0) + Math.max(0, sinceMidnight);
+    const sub = state.subtractedMs || 0;
+    const elapsed = Math.max(0, now - state.startedAt - sub);
+    // Today = already-logged today (local delta) + the running session's portion
+    // since midnight, minus subtracted time.
+    const rawSinceMidnight = now - Math.max(state.startedAt, startOfLocalDay());
+    const sinceMidnight = Math.max(0, rawSinceMidnight - sub);
+    const today = (state.todayMsBase || 0) + sinceMidnight;
+    // Total = unexported delta (not lifetime)
     const total = (state.totalMsBase || 0) + elapsed;
     $('elapsed').textContent = fmtClock(elapsed);
     $('today').textContent = 'Today ' + fmtToday(today);
@@ -177,21 +181,23 @@
 
   function renderIdleRecents() {
     const wrap = $('idle-recents');
+    const label = $('idle-recents-label');
     if (!wrap) return;
     wrap.innerHTML = '';
     const recents = (jobs.recents || []).slice(0, 5);
+    if (label) label.classList.toggle('hidden', !recents.length);
     if (!recents.length) return;
     for (const j of recents) {
       const row = document.createElement('div');
       row.className = 'idle-recent-row';
       const dot = document.createElement('span');
       dot.className = 'idle-recent-dot';
-      const label = document.createElement('span');
-      label.textContent = j.name;
-      label.style.overflow = 'hidden';
-      label.style.textOverflow = 'ellipsis';
+      const lbl = document.createElement('span');
+      lbl.textContent = j.name;
+      lbl.style.overflow = 'hidden';
+      lbl.style.textOverflow = 'ellipsis';
       row.appendChild(dot);
-      row.appendChild(label);
+      row.appendChild(lbl);
       row.addEventListener('click', () => pickJob(j));
       wrap.appendChild(row);
     }
@@ -269,8 +275,21 @@
     play.style.color = isLightColor(color) ? '#333' : '#fff';
     play.innerHTML =
       '<svg viewBox="0 0 16 16" width="10" height="10"><path d="M5 3 L12 8 L5 13 Z" fill="currentColor"/></svg>';
+
+    // Export button (upload icon)
+    const exp = document.createElement('button');
+    exp.className = 'job-row-export';
+    exp.title = 'Export time';
+    exp.innerHTML =
+      '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V3M5 5l3-3 3 3M3 13h10"/></svg>';
+    exp.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openExportMenu(job, exp);
+    });
+
     row.appendChild(main);
     row.appendChild(play);
+    row.appendChild(exp);
     row.addEventListener('click', () => pickJob(job));
     return row;
   }
@@ -360,6 +379,109 @@
   }
 
   // (group pill filtering replaces the old mine/all scope toggle)
+
+  // ---- export menu ----
+  function openExportMenu(job, anchorEl) {
+    const menu = $('export-menu');
+    exportMenuTarget = job.id;
+    // Position near the anchor button
+    const rect = anchorEl.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    menu.style.left = '';
+    menu.classList.remove('hidden');
+  }
+  function closeExportMenu() {
+    $('export-menu').classList.add('hidden');
+    exportMenuTarget = null;
+  }
+
+  async function doExportAll(itemId) {
+    closeExportMenu();
+    const result = await api.exportAll(itemId);
+    if (result.ok) {
+      showToast({ text: `Export #${String(result.exportId).padStart(3, '0')} posted`, durationMs: 4000 });
+    } else {
+      showToast({ text: 'Export failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
+    }
+  }
+
+  async function doExportAndClear(itemId) {
+    closeExportMenu();
+    // Get current delta for confirmation
+    const info = await api.getExportInfo(itemId);
+    if (info.deltaMs <= 0) {
+      showToast({ text: 'No unexported time on this job.', durationMs: 4000 });
+      return;
+    }
+    const durStr = fmtToday(info.deltaMs);
+    $('confirm-export-msg').textContent =
+      `Post ${durStr} to Monday and reset the timer for this job?`;
+    const noteInput = $('confirm-export-note');
+    noteInput.value = '';
+    $('confirm-export').classList.remove('hidden');
+    setTimeout(() => noteInput.focus(), 30);
+    // Wire up confirm/cancel (one-shot)
+    const yes = $('confirm-export-yes');
+    const no = $('confirm-export-no');
+    const cleanup = () => {
+      $('confirm-export').classList.add('hidden');
+      yes.replaceWith(yes.cloneNode(true));
+      no.replaceWith(no.cloneNode(true));
+      noteInput.removeEventListener('keydown', onKey);
+    };
+    const doConfirm = async () => {
+      const note = noteInput.value.trim();
+      cleanup();
+      const result = await api.exportAndClear(itemId, note);
+      if (result.ok) {
+        showToast({ text: `Export #${String(result.exportId).padStart(3, '0')} posted — timer reset`, durationMs: 4000 });
+      } else {
+        showToast({ text: 'Export failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
+      }
+    };
+    const onKey = (e) => { if (e.key === 'Enter') doConfirm(); };
+    noteInput.addEventListener('keydown', onKey);
+    yes.addEventListener('click', doConfirm, { once: true });
+    no.addEventListener('click', cleanup, { once: true });
+  }
+
+  // ---- distraction recovery ----
+  function subtractTime(ms, label) {
+    if (!state.running) return;
+    api.subtractTime(ms).then((s) => {
+      if (s) {
+        state = { ...state, ...s };
+        renderTime();
+      }
+    });
+    // Visual feedback: flash elapsed red and show indicator
+    const el = $('elapsed');
+    el.classList.add('elapsed-flash');
+    setTimeout(() => el.classList.remove('elapsed-flash'), 400);
+    const flash = $('distract-flash');
+    flash.textContent = label;
+    flash.classList.remove('hidden');
+    // Force re-trigger animation
+    flash.style.animation = 'none';
+    flash.offsetHeight; // reflow
+    flash.style.animation = '';
+    setTimeout(() => flash.classList.add('hidden'), 1000);
+  }
+
+  // ---- refresh jobs ----
+  async function refreshJobs() {
+    const btn = $('refresh-btn');
+    btn.classList.add('spinning');
+    jobs = await api.getJobs('all');
+    btn.classList.remove('spinning');
+    if (jobs.error) {
+      $('picker-empty').textContent = jobs.error;
+      $('picker-empty').classList.remove('hidden');
+    }
+    renderFilterPills();
+    renderPicker();
+  }
 
   // ---- toast / alert / modal / sync ----
   function showToast(t) {
@@ -467,6 +589,27 @@
       setView('idle');
     });
 
+    // Distraction recovery
+    $('sub5-btn').addEventListener('click', () => subtractTime(5 * 60 * 1000, '-5:00'));
+    $('sub15-btn').addEventListener('click', () => subtractTime(15 * 60 * 1000, '-15:00'));
+
+    // Refresh jobs
+    $('refresh-btn').addEventListener('click', () => refreshJobs());
+
+    // Export menu items
+    $('export-all-btn').addEventListener('click', () => {
+      if (exportMenuTarget) doExportAll(exportMenuTarget);
+    });
+    $('export-clear-btn').addEventListener('click', () => {
+      if (exportMenuTarget) doExportAndClear(exportMenuTarget);
+    });
+    // Close export menu on outside click
+    document.addEventListener('click', (e) => {
+      if (exportMenuTarget && !$('export-menu').contains(e.target) && !e.target.closest('.job-row-export')) {
+        closeExportMenu();
+      }
+    });
+
     bindPill();
     bindResizeGrip();
 
@@ -495,6 +638,7 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && view === 'picker') closePicker();
+      if (e.key === 'Escape' && exportMenuTarget) closeExportMenu();
     });
 
     api.onState(applyState);

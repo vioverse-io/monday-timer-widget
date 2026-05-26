@@ -37,7 +37,10 @@
 
       <!-- Idle -->
       <div id="view-idle" class="view view-idle">
-        <div id="idle-recents" class="idle-recents"></div>
+        <div id="idle-recents-wrap" class="idle-recents-wrap">
+          <div id="idle-recents-label" class="section-label hidden">RECENT</div>
+          <div id="idle-recents" class="idle-recents"></div>
+        </div>
         <button id="start-job-btn" class="btn btn-primary">Start a job</button>
       </div>
 
@@ -61,11 +64,21 @@
             Switch
           </button>
         </div>
+        <div class="btn-row distract-row">
+          <button id="sub5-btn" class="btn btn-ghost btn-distract">−5 min</button>
+          <button id="sub15-btn" class="btn btn-ghost btn-distract">−15 min</button>
+        </div>
+        <span id="distract-flash" class="distract-flash hidden"></span>
       </div>
 
       <!-- Picker -->
       <div id="view-picker" class="view hidden">
-        <div id="filter-row" class="filter-row no-drag"></div>
+        <div class="filter-row-wrap no-drag">
+          <div id="filter-row" class="filter-row"></div>
+          <button id="refresh-btn" class="icon-btn refresh-btn" title="Refresh jobs">
+            <svg id="refresh-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8a6 6 0 0 1 10.3-4.1L14 2v4h-4l1.6-1.6A4.5 4.5 0 0 0 3.5 8M14 8a6 6 0 0 1-10.3 4.1L2 14v-4h4l-1.6 1.6A4.5 4.5 0 0 0 12.5 8"/></svg>
+          </button>
+        </div>
         <div class="search-wrap">
           <svg class="search-icon" viewBox="0 0 16 16" width="13" height="13"><circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 10 L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
           <input id="search" class="search no-drag" type="text" placeholder="Search jobs or paste a job number" />
@@ -128,6 +141,23 @@
         <div class="modal-msg">Track time locally and log finished sessions to your Monday board.</div>
         <button class="btn btn-primary modal-btn" id="welcome-connect">Connect to Monday</button>
         <button class="btn btn-switch modal-btn" id="welcome-demo">Try demo mode</button>
+      </div>
+    </div>
+
+    <!-- Export popover menu (positioned dynamically in JS) -->
+    <div id="export-menu" class="export-menu hidden">
+      <button id="export-all-btn" class="export-menu-item">Export All</button>
+      <button id="export-clear-btn" class="export-menu-item">Export and Clear</button>
+    </div>
+
+    <!-- Export confirmation modal -->
+    <div id="confirm-export" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-title">Confirm Export</div>
+        <div id="confirm-export-msg" class="modal-msg"></div>
+        <input id="confirm-export-note" class="search no-drag" type="text" maxlength="120" placeholder="What did you work on? (optional)" />
+        <button class="btn btn-primary modal-btn" id="confirm-export-yes">Confirm</button>
+        <button class="btn btn-ghost modal-btn" id="confirm-export-no">Cancel</button>
       </div>
     </div>
 

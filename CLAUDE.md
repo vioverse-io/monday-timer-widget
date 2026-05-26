@@ -16,22 +16,26 @@ This is separate from the `vio` shortcut (that one goes to ~/isolated-test-area 
 Vioverse). This project lives at `vioverse-io/monday-timer-widget` on GitHub (public).
 
 ## What this is
-A frameless, always-on-top Windows Electron widget that tracks time locally and logs
-completed sessions as **comments** on a Monday.com board. Single-user, no central server.
+A frameless, always-on-top Windows Electron widget that tracks time locally and exports
+accumulated time to a Monday.com board via manual exports. Single-user, no central server.
 Full spec: `monday_timer_widget_build_prompt_v2.md`. Architecture: `README.md`.
+v3 planning: `v3-planning.md`.
 
 ## Non-negotiable design rule (local-clock model)
 Monday's API cannot write to the time-tracking column at all (mutations blank it).
-The widget **owns the clock**; on stop/switch it posts a **comment (Update)** on the
-Monday item with the session duration and start/end times. Never try to write to the
-time-tracking column — use `create_update` only.
+The widget **owns the clock**. Stop/switch accumulate time locally — no API call.
+Posting to Monday only happens via **manual Export** (Export All or Export and Clear)
+through the `create_update` mutation. Never try to write to the time-tracking column.
 
 ## Status (keep this updated as work progresses)
-- **Demo mode: complete.** **Real Monday mode: working (verified 2026-05-25).**
-- Sessions are logged as comments (Updates) on Monday items via `create_update` mutation.
-- Job picker uses group pills (Priority, Low Priority, etc.) pulled from the board API.
-- Current version is in `package.json`. Installer delivered via GitHub Releases at
-  `vioverse-io/monday-timer-widget`.
+- **v2.0.0.** Demo mode: complete. Real Monday mode: working.
+- Stop/switch save time locally. Exports post comments to Monday via `create_update`.
+- Export and Clear resets the job's delta; Export All posts lifetime total.
+- Per-job data persisted in `jobTimers` (electron-store): totalMs, deltaMs, exportCount.
+- Export comments include sequential Export #ID, duration, date, optional note.
+- Job picker uses group pills with refresh button. Distraction recovery (-5/-15 min).
+- Today/Total in tracking view reflect unexported delta, not lifetime.
+- Installer delivered via GitHub Releases at `vioverse-io/monday-timer-widget`.
 
 ## How to verify changes (no Monday token needed)
 - **UI in a plain browser** (harness): serve `src/renderer`, then open
@@ -59,12 +63,15 @@ times out, run `wineboot --init` once first, then rebuild. Unsigned → SmartScr
   grip use JS pointer-drag, not app-region.
 - Window is `resizable:true` so `setContentSize` works both directions; per-view sizes plus
   a persisted user `userSize` delta (only set by the grip, not the `resize` event).
+  `setContentSize` on frameless Windows shifts the origin — all callers pin position after.
 - API token encrypted via `safeStorage` (tied to Windows user account, survives reinstalls
   on the same machine). Logs in `userData/logs` (weekly rotation).
 - Job picker pulls all groups from the board API; filter pills are built dynamically with
   each group's Monday color. No manual group configuration in settings.
 - Jobs sorted by due date (earliest first). Recents on idle screen use persisted history.
-- Time: **Today** = local-day-clipped session time; **Total** = all-time. Timezone EST.
-- Monday's API cannot write to the time-tracking column. Do not attempt it. Sessions are
-  logged as comments via `create_update` mutation.
+- Time: **Today** = local-day-clipped unexported delta; **Total** = full unexported delta
+  (time since last Export and Clear). Timezone EST.
+- Monday's API cannot write to the time-tracking column. Do not attempt it. Exports are
+  posted as comments via `create_update` mutation. Other column types (Numbers, Text) can
+  be written via `change_column_value` — planned for v3 (see `v3-planning.md`).
 - Commit only when the user asks.

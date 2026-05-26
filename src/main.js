@@ -17,7 +17,7 @@ const isDev = process.argv.includes('--dev');
 
 const SIZES = {
   idle: { w: 340, h: 220 },
-  running: { w: 340, h: 220 },
+  running: { w: 340, h: 260 },
   picker: { w: 340, h: 320 },
   pill: { w: 120, h: 40 }
 };
@@ -226,7 +226,10 @@ function resizeForView(view) {
   currentView = view;
   if (view !== 'pill') lastFullView = view;
   const size = sizeForView(view);
+  const [x, y] = mainWindow.getPosition();
   mainWindow.setContentSize(size.w, size.h);
+  const [x2, y2] = mainWindow.getPosition();
+  if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
 }
 
 function showWidget() {
@@ -321,6 +324,14 @@ async function loadJobs(scope = 'all') {
     const recentIds = settings.get('recentItemIds') || [];
     const recents = recentIds.slice(0, 5).map((id) => byId[id]).filter(Boolean);
 
+    // Merge per-job local timer data into each job for the renderer.
+    for (const j of sorted) {
+      const jt = settings.getJobTimer(j.id);
+      j.localDeltaMs = jt.deltaMs;
+      j.localTotalMs = jt.totalMs;
+      j.localExportCount = jt.exportCount;
+    }
+
     jobsCache = { all: sorted, recents, byId, groups };
     return jobsCache;
   } catch (err) {
@@ -367,9 +378,33 @@ function startOrSwitch(job) {
   showWidget();
 }
 
+function jobTimerBases(itemId) {
+  const jt = settings.getJobTimer(itemId);
+  const today = new Date().toDateString();
+  return {
+    todayMsBase: jt.todayDate === today ? jt.todayMs : 0,
+    totalMsBase: jt.deltaMs
+  };
+}
+
+function accumulateSession(session) {
+  if (!session || !session.durationMs) return;
+  const jt = settings.getJobTimer(session.itemId);
+  jt.totalMs += session.durationMs;
+  jt.deltaMs += session.durationMs;
+  const today = new Date().toDateString();
+  if (jt.todayDate === today) {
+    jt.todayMs += session.durationMs;
+  } else {
+    jt.todayDate = today;
+    jt.todayMs = session.durationMs;
+  }
+  settings.setJobTimer(session.itemId, jt);
+}
+
 function startJob(jobInput) {
-  const j = jobsCache.byId[jobInput.itemId] || {};
-  timer.start({ itemId: jobInput.itemId, itemName: jobInput.itemName, todayMsBase: j.todayMs || 0, totalMsBase: j.totalMs || 0 });
+  const bases = jobTimerBases(jobInput.itemId);
+  timer.start({ itemId: jobInput.itemId, itemName: jobInput.itemName, todayMsBase: bases.todayMsBase, totalMsBase: bases.totalMsBase });
   settings.pushRecent(jobInput.itemId);
   persistRunning();
   setTrayState('running');
@@ -383,7 +418,7 @@ function stopAndLog(endedAt) {
   settings.set('runningSession', null);
   if (session) {
     settings.pushRecent(session.itemId);
-    writeSession(session);
+    accumulateSession(session);
   }
   setTrayState('idle');
   pushState();
@@ -392,16 +427,16 @@ function stopAndLog(endedAt) {
 }
 
 function switchAndLog(jobInput) {
-  const j = jobsCache.byId[jobInput.itemId] || {};
+  const bases = jobTimerBases(jobInput.itemId);
   const { completed } = timer.switchTo({
     itemId: jobInput.itemId,
     itemName: jobInput.itemName,
-    todayMsBase: j.todayMs || 0,
-    totalMsBase: j.totalMs || 0
+    todayMsBase: bases.todayMsBase,
+    totalMsBase: bases.totalMsBase
   });
   if (completed) {
     settings.pushRecent(completed.itemId);
-    writeSession(completed); // failure → retry queue, new timer already running
+    accumulateSession(completed);
   }
   settings.pushRecent(jobInput.itemId);
   persistRunning();
@@ -423,7 +458,8 @@ function undoSwitch() {
   if (!prev) return appState();
   clearTimeout(undoTimer);
   timer.discard(); // discard the new (unwritten) local session
-  timer.start({ itemId: prev.itemId, itemName: prev.itemName, todayMsBase: prev.todayMsBase });
+  const bases = jobTimerBases(prev.itemId);
+  timer.start({ itemId: prev.itemId, itemName: prev.itemName, todayMsBase: bases.todayMsBase, totalMsBase: bases.totalMsBase });
   timer.previousJob = null;
   persistRunning();
   setTrayState('running');
@@ -434,7 +470,8 @@ function undoSwitch() {
 }
 
 function resumeJob(job) {
-  timer.start({ itemId: job.itemId, itemName: job.itemName, todayMsBase: job.todayMsBase || 0 });
+  const bases = jobTimerBases(job.itemId);
+  timer.start({ itemId: job.itemId, itemName: job.itemName, todayMsBase: bases.todayMsBase, totalMsBase: bases.totalMsBase });
   persistRunning();
   setTrayState('running');
   pushState();
@@ -465,10 +502,10 @@ function handleMorningChoice(choice) {
   if (saved) {
     if (choice === 'stop-yesterday') {
       const end = endOfBusinessFor(saved.startedAt);
-      writeSession({ itemId: saved.itemId, itemName: saved.itemName, startedAt: saved.startedAt, endedAt: end, durationMs: end - saved.startedAt });
+      accumulateSession({ itemId: saved.itemId, itemName: saved.itemName, startedAt: saved.startedAt, endedAt: end, durationMs: end - saved.startedAt });
     } else if (choice === 'overnight') {
       const end = Date.now();
-      writeSession({ itemId: saved.itemId, itemName: saved.itemName, startedAt: saved.startedAt, endedAt: end, durationMs: end - saved.startedAt });
+      accumulateSession({ itemId: saved.itemId, itemName: saved.itemName, startedAt: saved.startedAt, endedAt: end, durationMs: end - saved.startedAt });
     }
     // 'discard' → write nothing
   }
@@ -597,6 +634,75 @@ function registerIpc() {
   ipcMain.handle('undo-switch', () => undoSwitch());
   ipcMain.handle('morning-choice', (_e, choice) => handleMorningChoice(choice));
 
+  ipcMain.handle('subtract-time', (_e, { ms }) => {
+    const s = timer.subtractTime(ms);
+    persistRunning();
+    pushState();
+    return s;
+  });
+
+  ipcMain.handle('get-export-info', (_e, itemId) => {
+    const jt = settings.getJobTimer(itemId);
+    let runningMs = 0;
+    if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
+    return {
+      deltaMs: jt.deltaMs + runningMs,
+      totalMs: jt.totalMs + runningMs,
+      exportCount: jt.exportCount
+    };
+  });
+
+  ipcMain.handle('export-all', async (_e, itemId) => {
+    const jt = settings.getJobTimer(itemId);
+    let runningMs = 0;
+    if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
+    const totalMs = jt.totalMs + runningMs;
+    if (totalMs <= 0) return { ok: false, error: 'No time to export.' };
+    const exportId = jt.exportCount + 1;
+    try {
+      await api.logExport(itemId, totalMs, exportId);
+      jt.exportCount = exportId;
+      settings.setJobTimer(itemId, jt);
+      log(`export-all item=${itemId} dur=${totalMs}ms export=#${exportId}`);
+      return { ok: true, exportId, durationMs: totalMs };
+    } catch (err) {
+      log(`export-all failed: ${err.message}`);
+      return { ok: false, error: err.message || 'Export failed.' };
+    }
+  });
+
+  ipcMain.handle('export-and-clear', async (_e, { itemId, note }) => {
+    const jt = settings.getJobTimer(itemId);
+    let runningMs = 0;
+    if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
+    const deltaMs = jt.deltaMs + runningMs;
+    if (deltaMs <= 0) return { ok: false, error: 'No time to export.' };
+    const exportId = jt.exportCount + 1;
+    try {
+      await api.logExport(itemId, deltaMs, exportId, note);
+      // Success — now clear local state
+      jt.exportCount = exportId;
+      jt.deltaMs = 0;
+      jt.todayMs = 0;
+      jt.todayDate = new Date().toDateString();
+      settings.setJobTimer(itemId, jt);
+      // If timer is running on this job, reset it to start fresh
+      if (timer.isRunning() && timer.itemId === itemId) {
+        timer.startedAt = Date.now();
+        timer.subtractedMs = 0;
+        timer.todayMsBase = 0;
+        timer.totalMsBase = 0;
+        persistRunning();
+        pushState();
+      }
+      log(`export-and-clear item=${itemId} dur=${deltaMs}ms export=#${exportId}`);
+      return { ok: true, exportId, durationMs: deltaMs };
+    } catch (err) {
+      log(`export-and-clear failed: ${err.message}`);
+      return { ok: false, error: err.message || 'Export failed.' };
+    }
+  });
+
   ipcMain.on('view-changed', (_e, view) => resizeForView(view));
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
@@ -612,7 +718,12 @@ function registerIpc() {
     const [w, h] = mainWindow.getContentSize();
     const nw = Math.max(280, Math.min(900, Math.round(w + dw)));
     const nh = Math.max(150, Math.min(1000, Math.round(h + dh)));
+    // Pin the top-left corner: setContentSize on a frameless window can shift the
+    // window origin on Windows. Capture position before, restore after.
+    const [x, y] = mainWindow.getPosition();
     mainWindow.setContentSize(nw, nh);
+    const [x2, y2] = mainWindow.getPosition();
+    if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
     const base = SIZES[lastFullView] || SIZES.idle;
     settings.set('userSize', { dw: nw - base.w, dh: nh - base.h });
   });

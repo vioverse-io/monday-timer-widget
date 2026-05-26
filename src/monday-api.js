@@ -197,6 +197,8 @@ async function getItems(groupIds, currentUserId) {
  * Log a completed session by posting an Update (comment) on the Monday item.
  * Monday's API does not support writing to the time-tracking column, so we record
  * sessions as human-readable comments instead.
+ *
+ * LEGACY: kept for the retry queue to drain old entries. New exports use logExport().
  */
 async function logSession(itemId, startedAt, endedAt) {
   if (isDemoMode) {
@@ -223,6 +225,44 @@ async function logSession(itemId, startedAt, endedAt) {
     `End: ${fmtTime(endedAt)}`,
     `Date: ${fmtDate(startedAt)}`
   ].join('\n');
+  await gql(
+    `mutation ($i: ID!, $body: String!) {
+       create_update(item_id: $i, body: $body) { id }
+     }`,
+    { i: itemId, body }
+  );
+  return { ok: true };
+}
+
+/**
+ * Post an export comment on a Monday item.
+ * @param {string} itemId   Monday item id
+ * @param {number} durationMs  total ms to report
+ * @param {number} exportId    sequential export number (e.g. 1, 2, 3)
+ * @param {string} [note]      optional one-line note (omitted from comment if empty)
+ */
+async function logExport(itemId, durationMs, exportId, note) {
+  if (isDemoMode) {
+    return { ok: true };
+  }
+  const h = Math.floor(durationMs / 3600000);
+  const m = Math.floor((durationMs % 3600000) / 60000);
+  const s = Math.floor((durationMs % 60000) / 1000);
+  let durStr;
+  if (h > 0) durStr = `${h}h ${m}m`;
+  else durStr = `${m}m ${s}s`;
+  const fmtDate = () => new Date().toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+  });
+  const lines = [
+    'Time Logged',
+    `Export #${String(exportId).padStart(3, '0')}`,
+    `Duration: ${durStr}`
+  ];
+  const trimmed = (note || '').trim();
+  if (trimmed) lines.push(`Note: ${trimmed}`);
+  lines.push(`Date: ${fmtDate()}`);
+  const body = lines.join('\n');
   await gql(
     `mutation ($i: ID!, $body: String!) {
        create_update(item_id: $i, body: $body) { id }
@@ -265,6 +305,7 @@ module.exports = {
   getColumns,
   getItems,
   logSession,
+  logExport,
   testConnection,
   API_VERSION
 };
