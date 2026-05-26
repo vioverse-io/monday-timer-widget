@@ -206,13 +206,6 @@ function createMainWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
   mainWindow.on('move', savePosition);
-  // Persist the user's size whenever they resize a full view (skip the pill).
-  mainWindow.on('resize', () => {
-    if (!mainWindow || mainWindow.isDestroyed() || currentView === 'pill') return;
-    const [w, h] = mainWindow.getContentSize();
-    const base = SIZES[lastFullView] || SIZES.idle;
-    settings.set('userSize', { dw: w - base.w, dh: h - base.h });
-  });
   // Surface renderer warnings/errors to the log file for diagnosis.
   mainWindow.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) log('renderer: ' + message);
@@ -221,6 +214,8 @@ function createMainWindow() {
     if (!app.isQuitting) {
       e.preventDefault();
       mainWindow.hide();
+      // Close settings window when main widget is hidden.
+      if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
     }
   });
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -276,7 +271,7 @@ function updateTrayTooltip() {
 }
 function buildTrayMenu() {
   const running = timer.isRunning();
-  const recent = jobsCache.recent.slice(0, 5).map((j) => ({
+  const topJobs = (jobsCache.all || []).slice(0, 5).map((j) => ({
     label: shortName(j.name),
     click: () => startOrSwitch(j)
   }));
@@ -284,7 +279,7 @@ function buildTrayMenu() {
     { label: 'Show widget', click: showWidget },
     { label: 'Stop timer', enabled: running, click: () => stopAndLog() },
     { type: 'separator' },
-    { label: 'Recent jobs', submenu: recent.length ? recent : [{ label: '(none yet)', enabled: false }] },
+    { label: 'Jobs', submenu: topJobs.length ? topJobs : [{ label: '(none)', enabled: false }] },
     { type: 'separator' },
     { label: 'Settings', click: openSettingsWindow },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
@@ -303,46 +298,39 @@ function createTray() {
 // ---------------------------------------------------------------------------
 // Job loading
 // ---------------------------------------------------------------------------
-async function loadJobs(scope = 'mine') {
+async function loadJobs(scope = 'all') {
   try {
     if (!currentUser) currentUser = await api.getMe();
-    const groupIds = settings.get('selectedGroupIds');
+    // Fetch all groups from the board so the renderer can show group pills.
+    const groups = await api.getGroups();
+    const groupIds = groups.map((g) => g.id);
     const all = await api.getItems(groupIds, currentUser.id);
-    const recentIds = settings.get('recentItemIds') || [];
 
-    let visible = all;
-    if (scope === 'mine') visible = all.filter((j) => j.assignedToMe);
-
-    const rank = (j) => {
-      const idx = recentIds.indexOf(j.id);
-      return idx === -1 ? Infinity : idx;
-    };
-    const sorted = [...visible].sort((a, b) => {
-      const ra = rank(a);
-      const rb = rank(b);
-      if (ra !== rb) return ra - rb;
-      return (b.lastSessionAt || 0) - (a.lastSessionAt || 0);
+    // Sort by due date (earliest first), items with no date go to the end.
+    const sorted = [...all].sort((a, b) => {
+      const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      if (da !== db) return da - db;
+      return a.name.localeCompare(b.name);
     });
-
-    const recentPool = sorted.filter((j) => rank(j) !== Infinity || (j.lastSessionAt || 0) > 0);
-    const recent = recentPool.slice(0, 5);
-    const recentSet = new Set(recent.map((j) => j.id));
-    const rest = sorted
-      .filter((j) => !recentSet.has(j.id))
-      .sort((a, b) => a.name.localeCompare(b.name));
 
     const byId = {};
     for (const j of all) byId[j.id] = j;
-    jobsCache = { recent, all: rest, byId, scope };
+
+    // Build recents from the persisted recent-item history.
+    const recentIds = settings.get('recentItemIds') || [];
+    const recents = recentIds.slice(0, 5).map((id) => byId[id]).filter(Boolean);
+
+    jobsCache = { all: sorted, recents, byId, groups };
     return jobsCache;
   } catch (err) {
     log('loadJobs error: ' + err.message);
-    return { recent: [], all: [], byId: {}, error: 'Couldn’t reach Monday. Retry in 30 seconds…' };
+    return { all: [], byId: {}, groups: [], error: "Couldn't reach Monday. Retry in 30 seconds." };
   }
 }
 
-function pushJobs(scope) {
-  loadJobs(scope).then((data) => {
+function pushJobs() {
+  loadJobs('all').then((data) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('jobs', data);
     refreshTrayMenu();
   });
@@ -630,7 +618,7 @@ function registerIpc() {
   });
   ipcMain.on('open-settings', openSettingsWindow);
   ipcMain.on('dismiss-banner', () => { bannerVisible = false; pushState(); });
-  ipcMain.on('refresh-jobs', (_e, scope) => pushJobs(scope || 'mine'));
+  ipcMain.on('refresh-jobs', () => pushJobs());
   ipcMain.on('choose-demo', () => { settings.set('setupComplete', true); pushState(); });
   ipcMain.on('alert-action', (_e, { kind, actionId, data }) => {
     safetyNets.handleAlertAction(kind, actionId, data);
@@ -686,7 +674,7 @@ function registerIpc() {
     applyLoginItem();
     setTrayState(timer.isRunning() ? 'running' : 'idle');
     pushState();
-    pushJobs('mine');
+    pushJobs();
     return { ok: true, demoMode };
   });
 }
@@ -735,15 +723,35 @@ if (!gotLock) {
       if ((settings.get('theme') || 'dark') === 'auto') applyThemeToWindows();
     });
 
+    // Auto-detect time-tracking column ID on real-mode startup.
+    if (!demoMode) {
+      api.getColumns().then((cols) => {
+        const ttCol = cols.find((c) => c.type === 'time_tracking');
+        if (ttCol) {
+          settings.set('timeTrackingColumnId', ttCol.id);
+          api.setCredentials({ timeTrackingColumnId: ttCol.id });
+          log(`auto-detected time-tracking column: ${ttCol.id} ("${ttCol.title}")`);
+        }
+      }).catch((err) => log('column detection failed: ' + err.message));
+
+      // Clear any retry-queue entries that were created before the column ID was known.
+      const q = settings.get('retryQueue') || [];
+      if (q.length) {
+        log(`clearing ${q.length} stuck retry-queue entry(s) from before column detection`);
+        settings.set('retryQueue', []);
+        pushSyncStatus();
+      }
+    }
+
     handleStartupSession();
     safetyNets.start();
 
     // Preload jobs cache (for tray submenu + today-base lookups).
-    pushJobs('mine');
+    pushJobs();
 
     // Periodic: retry queue + jobs/today refresh.
     setInterval(processRetryQueue, 2 * 60 * 1000);
-    setInterval(() => { if (mainWindow && mainWindow.isVisible()) pushJobs(jobsCache.scope || 'mine'); }, 5 * 60 * 1000);
+    setInterval(() => { if (mainWindow && mainWindow.isVisible()) pushJobs(); }, 5 * 60 * 1000);
 
     // Show on launch unless started hidden at OS login (or running the smoke test).
     const wasHidden = app.getLoginItemSettings().wasOpenedAsHidden;

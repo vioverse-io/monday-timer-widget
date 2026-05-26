@@ -96,7 +96,10 @@ function getToken() {
     try {
       return safeStorage.decryptString(Buffer.from(stored, 'base64'));
     } catch (err) {
-      // Encryption key changed / unavailable — treat as no token rather than crash.
+      // Encryption key changed (reinstall) — clear the stale token so the user
+      // sees an empty field and knows to re-enter it.
+      store.set('apiToken', null);
+      store.set('tokenEncrypted', false);
       return null;
     }
   }

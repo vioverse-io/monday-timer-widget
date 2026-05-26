@@ -1,27 +1,22 @@
 # Compu-Mail Timer
 
 A frameless, always-on-top Windows desktop widget that tracks time **locally** and logs
-**completed** time-tracking sessions to a Monday.com board. It keeps the active job
+completed sessions as **comments** on a Monday.com board. It keeps the active job
 visible at all times and makes switching jobs a one-click action.
 
-## Why local-clock (read this)
+## Why local-clock + comments
 
-Monday's API **cannot** start or stop a live timer remotely. There is no start/stop
-mutation, and writing `start`/`stop` (or a `running: true` state) into the time-tracking
-column can blank the column. What the API supports is **reading** sessions and **creating
-a finished session** (start + end timestamps).
-
-So this widget owns the clock on the user's machine. When a session ends (stop, switch,
-auto-stop, etc.) it writes **one completed session** to Monday with the real start/end
-times. Time can never silently keep running against the wrong job inside Monday.
+Monday's API **cannot** write to the time-tracking column (mutations blank it). The
+widget owns the clock on the user's machine. When a session ends (stop, switch,
+auto-stop, etc.) it posts a **comment (Update)** on the Monday item with the duration
+and start/end times, e.g.: "Time logged: 1h 30m — 2:00 PM to 3:30 PM, May 25".
 
 ## Status
 
-- **Demo mode is complete and verified.** The full UI, the local-clock engine, and all
-  four safety nets run with hardcoded mock data — no token or network required.
-- **Real Monday mode is implemented but UNVERIFIED.** Before trusting it, run the
-  **Step 0 live-board check** below to confirm the time-tracking column id and the exact
-  create-session payload against board `7833051194`, then update `src/monday-api.js`.
+- **Demo mode and real Monday mode are both working.**
+- Sessions are logged as comments via `create_update` mutation.
+- Job picker shows group pills (Priority, Low Priority, Declined, etc.) pulled from
+  the board API. No manual group configuration needed.
 
 ## Run it
 
@@ -70,29 +65,6 @@ Node installed there. Code signing is not configured for v1 — Windows SmartScr
 warn on first install ("More info → Run anyway").
 
 Tray/app icons are generated (no design tools needed): `node build/gen-icons.js`.
-
-## Step 0 — live-board discovery (REQUIRED before real mode)
-
-Do this once with a real token before relying on real mode. Use the Monday API
-playground or a throwaway script:
-
-1. `query { me { id name email } }` — confirm the token and capture the user id.
-2. Query board `7833051194` columns; find the **time-tracking** column's real `id` and
-   `type`. Do **not** assume the id.
-3. Read an existing item's time-tracking column `value` to learn the exact session JSON
-   shape (field names for start/end/duration).
-4. On a **throwaway test item** (non-priority group), perform the create-completed-session
-   write and confirm in the Monday web UI that the session shows with the right
-   start/end/duration — and that the column is **not** blanked.
-5. Lock in whichever payload actually worked. Update in `src/monday-api.js`:
-   - the `timeTrackingColumnId` (also settable via the app, persisted in settings)
-   - `logSession()`'s payload to the confirmed shape
-   - `API_VERSION` to the current stable version from the changelog
-   Then record the confirmed column id and payload here in the README.
-
-> The current implementation uses `change_multiple_column_values` writing
-> `{ <ttColumnId>: { started_at, ended_at } }`. This follows Monday's documented general
-> form but **must be confirmed** in step 4 before use.
 
 ## Architecture
 

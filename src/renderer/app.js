@@ -10,8 +10,8 @@
   let view = 'idle';
   let prevFullView = 'idle';
   let pickerMode = 'start'; // 'start' | 'switch'
-  let scope = 'mine'; // 'mine' | 'all'
-  let jobs = { recent: [], all: [] };
+  let activeGroupId = null;     // null = first group (Priority), or a group id
+  let jobs = { all: [], groups: [] };
   let tickInterval = null;
   let toastTimer = null;
 
@@ -172,7 +172,29 @@
     }
 
     if (s.running) startTick();
-    else stopTick();
+    else { stopTick(); renderIdleRecents(); }
+  }
+
+  function renderIdleRecents() {
+    const wrap = $('idle-recents');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const recents = (jobs.recents || []).slice(0, 5);
+    if (!recents.length) return;
+    for (const j of recents) {
+      const row = document.createElement('div');
+      row.className = 'idle-recent-row';
+      const dot = document.createElement('span');
+      dot.className = 'idle-recent-dot';
+      const label = document.createElement('span');
+      label.textContent = j.name;
+      label.style.overflow = 'hidden';
+      label.style.textOverflow = 'ellipsis';
+      row.appendChild(dot);
+      row.appendChild(label);
+      row.addEventListener('click', () => pickJob(j));
+      wrap.appendChild(row);
+    }
   }
 
   // ---- picker ----
@@ -180,7 +202,13 @@
     pickerMode = mode;
     setView('picker');
     $('search').value = '';
-    jobs = await api.getJobs(scope);
+    // Always fetch all jobs; filtering happens client-side via pills.
+    jobs = await api.getJobs('all');
+    if (jobs.error) {
+      $('picker-empty').textContent = jobs.error;
+      $('picker-empty').classList.remove('hidden');
+    }
+    renderFilterPills();
     renderPicker();
     setTimeout(() => $('search').focus(), 30);
   }
@@ -188,16 +216,27 @@
     setView(state.running ? 'running' : 'idle');
   }
 
+  function groupColor() {
+    const gid = effectiveGroupId();
+    const g = (jobs.groups || []).find((gr) => gr.id === gid);
+    return g ? g.color : '#0073EA';
+  }
+
+  function isLightColor(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 160;
+  }
+
   function rowEl(job) {
     const row = document.createElement('div');
     row.className = 'job-row';
-    // The currently-running job is highlighted green (number + arrow).
     if (state.running && job.id === state.itemId) row.classList.add('active');
 
     const main = document.createElement('div');
     main.className = 'job-row-main';
 
-    // Line 1: number first (green when active), then " — description" (number stripped).
     const name = document.createElement('div');
     name.className = 'job-row-name';
     const n = jobNum(job.name);
@@ -213,41 +252,82 @@
     }
     name.title = job.name;
 
-    // Line 2: time only (no duplicate number).
     const sub = document.createElement('div');
     sub.className = 'job-row-sub';
-    sub.textContent = `${fmtToday(job.todayMs || 0)} today`;
+    const parts = [];
+    if (job.dueDate) parts.push(job.dueDate);
+    parts.push(fmtToday(job.todayMs || 0) + ' today');
+    sub.textContent = parts.join(' · ');
 
     main.appendChild(name);
     main.appendChild(sub);
 
+    const color = groupColor();
     const play = document.createElement('span');
-    play.className = 'job-row-play';
+    play.className = 'job-row-play-pill';
+    play.style.background = color;
+    play.style.color = isLightColor(color) ? '#333' : '#fff';
     play.innerHTML =
-      '<svg viewBox="0 0 16 16" width="12" height="12"><path d="M5 3 L12 8 L5 13 Z" fill="currentColor"/></svg>';
+      '<svg viewBox="0 0 16 16" width="10" height="10"><path d="M5 3 L12 8 L5 13 Z" fill="currentColor"/></svg>';
     row.appendChild(main);
     row.appendChild(play);
     row.addEventListener('click', () => pickJob(job));
     return row;
   }
 
+  function effectiveGroupId() {
+    if (activeGroupId) return activeGroupId;
+    // Default to the first group (usually Priority).
+    const groups = jobs.groups || [];
+    return groups.length ? groups[0].id : null;
+  }
+
+  function filterJob(j) {
+    const gid = effectiveGroupId();
+    if (gid && j.groupId !== gid) return false;
+    return true;
+  }
+
   function renderPicker() {
     const q = $('search').value.trim().toLowerCase();
     const match = (j) =>
       !q || j.name.toLowerCase().includes(q) || jobNum(j.name).includes(q);
-    const recent = (jobs.recent || []).filter(match);
-    const all = (jobs.all || []).filter(match);
+    const filtered = (jobs.all || []).filter((j) => filterJob(j) && match(j));
 
-    const recentList = $('recent-list');
-    const allList = $('all-list');
-    recentList.innerHTML = '';
-    allList.innerHTML = '';
-    recent.forEach((j) => recentList.appendChild(rowEl(j)));
-    all.forEach((j) => allList.appendChild(rowEl(j)));
+    const list = $('all-list');
+    list.innerHTML = '';
+    filtered.forEach((j) => list.appendChild(rowEl(j)));
 
-    $('recent-label').classList.toggle('hidden', recent.length === 0);
-    $('all-label').classList.toggle('hidden', all.length === 0);
-    $('picker-empty').classList.toggle('hidden', recent.length + all.length > 0);
+    $('recent-label').classList.add('hidden');
+    $('all-label').classList.add('hidden');
+    $('picker-empty').classList.toggle('hidden', filtered.length > 0);
+  }
+
+  function renderFilterPills() {
+    const row = $('filter-row');
+    row.innerHTML = '';
+    const gid = effectiveGroupId();
+    for (const g of (jobs.groups || [])) {
+      const isActive = gid === g.id;
+      const pill = document.createElement('button');
+      pill.className = 'filter-pill' + (isActive ? ' active' : '');
+      pill.textContent = g.title
+        .replace(/\s*-\s*Assigned\s*Projects?/i, '')
+        .replace(/\s*Projects?$/i, '')
+        .replace(/\s*Requests?$/i, '');
+      // Use the group's Monday color for the active pill.
+      if (isActive && g.color) {
+        pill.style.background = g.color;
+        pill.style.borderColor = g.color;
+        pill.style.color = isLightColor(g.color) ? '#333' : '#fff';
+      }
+      pill.addEventListener('click', () => {
+        activeGroupId = g.id;
+        renderFilterPills();
+        renderPicker();
+      });
+      row.appendChild(pill);
+    }
   }
 
   async function pickJob(job) {
@@ -279,13 +359,7 @@
     }
   }
 
-  async function setScope(next) {
-    scope = next;
-    $('seg-mine').classList.toggle('active', scope === 'mine');
-    $('seg-all').classList.toggle('active', scope === 'all');
-    jobs = await api.getJobs(scope);
-    renderPicker();
-  }
+  // (group pill filtering replaces the old mine/all scope toggle)
 
   // ---- toast / alert / modal / sync ----
   function showToast(t) {
@@ -362,12 +436,15 @@
     grip.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { grip.setPointerCapture(e.pointerId); } catch (_) { /* synthetic/edge */ }
-      drag = { x: e.screenX, y: e.screenY };
+      drag = { x: e.screenX, y: e.screenY, started: false };
     });
     grip.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const dw = e.screenX - drag.x;
       const dh = e.screenY - drag.y;
+      // Require real movement before resizing (ignore sub-pixel jitter).
+      if (!drag.started && Math.abs(dw) < 3 && Math.abs(dh) < 3) return;
+      drag.started = true;
       drag.x = e.screenX;
       drag.y = e.screenY;
       api.resizeBy(dw, dh);
@@ -393,8 +470,6 @@
     bindPill();
     bindResizeGrip();
 
-    $('seg-mine').addEventListener('click', () => setScope('mine'));
-    $('seg-all').addEventListener('click', () => setScope('all'));
     $('search').addEventListener('input', renderPicker);
 
     $('toast-undo').addEventListener('click', async () => {
@@ -425,7 +500,8 @@
     api.onState(applyState);
     api.onJobs((j) => {
       jobs = j;
-      if (view === 'picker') renderPicker();
+      if (view === 'picker') { renderFilterPills(); renderPicker(); }
+      if (view === 'idle') renderIdleRecents();
     });
     api.onToast(showToast);
     api.onAlert(showAlert);
@@ -439,7 +515,7 @@
   async function init() {
     bind();
     const cfg = await api.getConfig();
-    scope = 'mine';
+    activeGroupId = null;
     const s = await api.getState();
     applyState(s);
   }

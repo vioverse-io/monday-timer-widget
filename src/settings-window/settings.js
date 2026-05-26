@@ -25,8 +25,6 @@
     ])
   };
 
-  let selectedGroupIds = [];
-
   function friendly(accel) {
     return (accel || '').replace('CommandOrControl', 'Ctrl').replace('Super', 'Win');
   }
@@ -38,38 +36,6 @@
       eff = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     document.documentElement.dataset.theme = eff;
-  }
-
-  function renderGroups(groups) {
-    const wrap = $('groups');
-    wrap.innerHTML = '';
-    if (!groups.length) {
-      wrap.innerHTML = '<div class="hint">No groups (test the connection first).</div>';
-      return;
-    }
-    // Default selection: the Priority group, if nothing is chosen yet.
-    if (!selectedGroupIds.length) {
-      const pri = groups.find((g) => /priority - assigned/i.test(g.title));
-      if (pri) selectedGroupIds = [pri.id];
-    }
-    groups.forEach((g) => {
-      const row = document.createElement('label');
-      row.className = 'group-item';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = g.id;
-      cb.checked = selectedGroupIds.includes(g.id);
-      cb.addEventListener('change', () => {
-        selectedGroupIds = cb.checked
-          ? [...selectedGroupIds, g.id]
-          : selectedGroupIds.filter((id) => id !== g.id);
-      });
-      const span = document.createElement('span');
-      span.textContent = g.title;
-      row.appendChild(cb);
-      row.appendChild(span);
-      wrap.appendChild(row);
-    });
   }
 
   function recordHotkey(input) {
@@ -106,7 +72,6 @@
     const s = await api.get();
     $('token').value = s.apiToken || '';
     $('boardId').value = s.boardId || '';
-    selectedGroupIds = s.selectedGroupIds || [];
 
     $('hotkeyStop').dataset.accel = s.hotkeyStop || '';
     $('hotkeyStop').value = friendly(s.hotkeyStop || '');
@@ -123,21 +88,31 @@
     $('morning-on').checked = sf.morningCheckin?.enabled ?? true;
 
     $('startup-on').checked = !!s.launchOnStartup;
-    $('demo-on').checked = !!s.forceDemoMode;
 
     $('theme').value = s.theme || 'dark';
     applyTheme(s.theme || 'dark');
 
-    const groups = await api.getGroups({ token: s.apiToken, boardId: s.boardId });
-    renderGroups(groups);
+    // Auto-test connection if a token is present.
+    if (s.apiToken) {
+      const res = $('test-result');
+      res.textContent = 'Checking…';
+      res.className = 'result';
+      const out = await api.test({ token: s.apiToken, boardId: s.boardId });
+      if (out.ok) {
+        res.textContent = `Connected as ${out.user.name}`;
+        res.className = 'result ok';
+      } else {
+        res.textContent = out.error || 'Not connected';
+        res.className = 'result err';
+      }
+    }
   }
 
   function gather() {
     return {
       apiToken: $('token').value.trim(),
       boardId: $('boardId').value.trim(),
-      selectedGroupIds,
-      forceDemoMode: $('demo-on').checked,
+      forceDemoMode: false,
       hotkeyStop: $('hotkeyStop').dataset.accel || '',
       hotkeyToggle: $('hotkeyToggle').dataset.accel || '',
       safety: {
@@ -167,7 +142,6 @@
       if (out.ok) {
         res.textContent = `Connected as ${out.user.name}`;
         res.className = 'result ok';
-        if (out.groups) renderGroups(out.groups);
       } else {
         res.textContent = out.error || 'Failed';
         res.className = 'result err';

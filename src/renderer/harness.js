@@ -21,19 +21,25 @@
   const params = new URLSearchParams(location.search);
 
   const H = 3600000;
+  const MOCK_GROUPS = [
+    { id: 'g1', title: 'Priority - Assigned Projects', color: '#E2445C' },
+    { id: 'g2', title: 'Low Priority Projects', color: '#0073EA' },
+    { id: 'g3', title: 'Declined Requests', color: '#FDAB3D' }
+  ];
+
   const MOCK_JOBS = [
-    { id: '1', name: 'Command HPP - Medicare Provider Termination - 111122', assignedToMe: true, todayMs: 5025000, totalMs: 5025000 + H * 9, lastSessionAt: Date.now() - 720000 },
-    { id: '2', name: 'Command Resi - Resi Daily - NYC Lead Inspections - 112300', assignedToMe: true, todayMs: 4320000, totalMs: 4320000 + H * 22, lastSessionAt: Date.now() - 2400000 },
-    { id: '3', name: 'Command VNS - Weekly Provider Term - 109437', assignedToMe: true, todayMs: 1320000, totalMs: 1320000 + H * 5, lastSessionAt: Date.now() - 5400000 },
-    { id: '4', name: '114041 - New Command Anthem Project', assignedToMe: true, todayMs: 0, totalMs: H * 2, lastSessionAt: Date.now() - 93600000 },
-    { id: '5', name: 'CarX - FTP data upload tests - 106536', assignedToMe: false, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
-    { id: '6', name: '114079 new VNS Command Recert letter', assignedToMe: true, todayMs: 0, totalMs: H + 1500000, lastSessionAt: Date.now() - 108000000 },
-    { id: '7', name: '112905 - HCHB, AgeIn, Docusign', assignedToMe: true, todayMs: 39562000, totalMs: 39562000 + H * 48, lastSessionAt: Date.now() - 300000 },
-    { id: '8', name: '113035 Selective Inserting', assignedToMe: true, todayMs: 0, totalMs: H * 3, lastSessionAt: 0 },
-    { id: '9', name: 'AAA Reading Berks IMS Midnight Job Number 113471', assignedToMe: true, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
-    { id: '10', name: 'Command HPP - New Medicaid and CHIP NDN/NOA - 113426', assignedToMe: true, todayMs: 0, totalMs: H * 6, lastSessionAt: 0 },
-    { id: '11', name: '113516 IMS Testing Northampton Schuylkill', assignedToMe: true, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
-    { id: '12', name: 'CRM System Hoosier AAA Club Job Number 112616', assignedToMe: true, todayMs: 0, totalMs: H * 4, lastSessionAt: 0 }
+    { id: '1', name: 'Command HPP - Medicare Provider Termination - 111122', groupId: 'g1', assignedToMe: true, todayMs: 5025000, totalMs: 5025000 + H * 9, lastSessionAt: Date.now() - 720000 },
+    { id: '2', name: 'Command Resi - Resi Daily - NYC Lead Inspections - 112300', groupId: 'g1', assignedToMe: true, todayMs: 4320000, totalMs: 4320000 + H * 22, lastSessionAt: Date.now() - 2400000 },
+    { id: '3', name: 'Command VNS - Weekly Provider Term - 109437', groupId: 'g1', assignedToMe: true, todayMs: 1320000, totalMs: 1320000 + H * 5, lastSessionAt: Date.now() - 5400000 },
+    { id: '4', name: '114041 - New Command Anthem Project', groupId: 'g1', assignedToMe: true, todayMs: 0, totalMs: H * 2, lastSessionAt: Date.now() - 93600000 },
+    { id: '5', name: 'CarX - FTP data upload tests - 106536', groupId: 'g2', assignedToMe: false, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
+    { id: '6', name: '114079 new VNS Command Recert letter', groupId: 'g1', assignedToMe: true, todayMs: 0, totalMs: H + 1500000, lastSessionAt: Date.now() - 108000000 },
+    { id: '7', name: '112905 - HCHB, AgeIn, Docusign', groupId: 'g1', assignedToMe: true, todayMs: 39562000, totalMs: 39562000 + H * 48, lastSessionAt: Date.now() - 300000 },
+    { id: '8', name: '113035 Selective Inserting', groupId: 'g2', assignedToMe: true, todayMs: 0, totalMs: H * 3, lastSessionAt: 0 },
+    { id: '9', name: 'AAA Reading Berks IMS Midnight Job Number 113471', groupId: 'g1', assignedToMe: true, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
+    { id: '10', name: 'Command HPP - New Medicaid and CHIP NDN/NOA - 113426', groupId: 'g1', assignedToMe: true, todayMs: 0, totalMs: H * 6, lastSessionAt: 0 },
+    { id: '11', name: '113516 IMS Testing Northampton Schuylkill', groupId: 'g3', assignedToMe: true, todayMs: 0, totalMs: 0, lastSessionAt: 0 },
+    { id: '12', name: 'CRM System Hoosier AAA Club Job Number 112616', groupId: 'g2', assignedToMe: true, todayMs: 0, totalMs: H * 4, lastSessionAt: 0 }
   ];
 
   const byId = {};
@@ -120,24 +126,14 @@
     return n && n.length > 40 ? n.slice(0, 37) + '…' : n || 'this job';
   }
 
-  function loadJobs(scope) {
-    let visible = MOCK_JOBS.slice();
-    if (scope === 'mine') visible = visible.filter((j) => j.assignedToMe);
-    const rank = (j) => {
-      const i = T.recentIds.indexOf(j.id);
-      return i === -1 ? Infinity : i;
-    };
-    const sorted = visible.sort((a, b) => {
-      const ra = rank(a);
-      const rb = rank(b);
-      if (ra !== rb) return ra - rb;
-      return (b.lastSessionAt || 0) - (a.lastSessionAt || 0);
+  function loadJobs() {
+    const sorted = MOCK_JOBS.slice().sort((a, b) => {
+      const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      if (da !== db) return da - db;
+      return a.name.localeCompare(b.name);
     });
-    const recentPool = sorted.filter((j) => rank(j) !== Infinity || (j.lastSessionAt || 0) > 0);
-    const recent = recentPool.slice(0, 5);
-    const set = new Set(recent.map((j) => j.id));
-    const rest = sorted.filter((j) => !set.has(j.id)).sort((a, b) => a.name.localeCompare(b.name));
-    return { recent, all: rest };
+    return { all: sorted, groups: MOCK_GROUPS };
   }
 
   function fireAlert(kind) {
@@ -152,7 +148,7 @@
   window.timerAPI = {
     getState: () => Promise.resolve(appState()),
     getConfig: () => Promise.resolve({ demoMode: true, bannerVisible: T.bannerVisible, theme: T.theme, firstRun: T.firstRun }),
-    getJobs: (scope) => Promise.resolve(loadJobs(scope)),
+    getJobs: () => Promise.resolve(loadJobs()),
     startJob: (j) => Promise.resolve(startJob(j)),
     stop: () => Promise.resolve(stop()),
     switchJob: (j) => Promise.resolve(switchJob(j)),

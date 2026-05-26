@@ -20,8 +20,8 @@ html, body {
   overflow: hidden;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 12px;
+  font-family: "Figtree", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -111,6 +111,28 @@ html, body {
   height: 100%;
 }
 .idle-msg { font-size: 14px; color: var(--text-secondary); }
+.idle-recents { width: 100%; }
+.idle-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.idle-recent-row:hover { background: var(--bg-secondary); }
+.idle-recent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+}
 
 /* ---- Running ---- */
 /* Job number: the focal point — large, green (matches the TRACKING dot). */
@@ -162,7 +184,7 @@ html, body {
   gap: 6px;
   border: 1px solid transparent;
 }
-.btn-primary { background: var(--accent-blue); color: #fff; border: none; }
+.btn-primary { background: var(--accent-blue); color: #fff; border: none; border-radius: 20px; padding: 8px 20px; }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn-stop { flex: 1; background: var(--accent-red); color: #fff; border: none; }
 .btn-stop:hover { filter: brightness(1.08); }
@@ -177,26 +199,33 @@ html, body {
 .btn-ghost:hover { color: var(--text-primary); }
 
 /* ---- Picker ---- */
-.seg-row {
+.filter-row {
   display: flex;
-  background: var(--bg-tertiary);
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.seg {
-  flex: 1;
-  background: none;
-  border: none;
+.filter-row::-webkit-scrollbar { display: none; }
+.filter-pill {
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
-  padding: 5px 4px;
-  border-radius: 4px;
+  padding: 5px 12px;
+  border-radius: 14px;
   cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.seg.active { background: var(--bg-secondary); color: var(--text-primary); }
+.filter-pill:hover { background: var(--bg-secondary); color: var(--text-primary); }
+/* Active pill gets its group color (set via inline style in JS) */
+.filter-pill.active { color: #fff; }
 
 .search-wrap { position: relative; margin-bottom: 8px; }
 .search-icon {
@@ -208,14 +237,14 @@ html, body {
 }
 .search {
   width: 100%;
-  height: 30px;
+  height: 34px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 13px;
   font-family: inherit;
-  padding: 0 8px 0 26px;
+  padding: 0 10px 0 28px;
   outline: none;
 }
 .search::placeholder { color: var(--text-tertiary); }
@@ -226,24 +255,27 @@ html, body {
 .picker-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
 .section-label {
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   color: var(--text-secondary);
-  margin: 6px 0 4px;
+  margin: 8px 0 4px;
 }
 .job-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border-radius: 5px;
+  gap: 10px;
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
+  transition: background 0.12s;
 }
+.job-row:last-child { border-bottom: none; }
 .job-row:hover { background: var(--bg-secondary); }
 .job-row-main { flex: 1; min-width: 0; }
 .job-row-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -251,13 +283,25 @@ html, body {
   text-overflow: ellipsis;
 }
 .job-row-num { font-weight: 700; }
-.job-row-sub { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
-.job-row-play { color: var(--text-secondary); display: inline-flex; }
-.job-row:hover .job-row-play { color: var(--accent-green); }
-/* Currently-running job: number + arrow green. */
+.job-row-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.job-row-play-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.job-row:hover .job-row-play-pill { opacity: 1; }
+/* Currently-running job: green tint background + green accents. */
+.job-row.active { background: rgba(0, 200, 117, 0.12); }
 .job-row.active .job-row-num { color: var(--accent-green); }
-.job-row.active .job-row-play { color: var(--accent-green); }
-.picker-empty { color: var(--text-tertiary); font-size: 11px; text-align: center; padding: 16px; }
+.job-row.active .job-row-name { color: #fff; }
+.job-row.active .job-row-play-pill { opacity: 1; background: var(--accent-green) !important; color: #fff !important; }
+.picker-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 16px; }
 
 /* ---- Collapsed pill ---- */
 .app.is-pill { background: var(--bg-primary); }

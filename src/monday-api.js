@@ -153,6 +153,7 @@ async function getItems(groupIds, currentUserId) {
     `query ($b: [ID!], $g: [String!]) {
        boards(ids: $b) {
          groups(ids: $g) {
+           id
            items_page(limit: 100) {
              items {
                id
@@ -175,13 +176,17 @@ async function getItems(groupIds, currentUserId) {
         : it.column_values.find((c) => c.type === 'time_tracking');
       const assignees = parseAssignees(peopleCol?.value);
       const { todayMs, totalMs, lastSessionAt } = parseTimeTracking(ttCol?.value);
+      const dateCol = it.column_values.find((c) => c.type === 'date');
+      const dueDate = dateCol?.text || null;
       items.push({
         id: it.id,
         name: it.name,
+        groupId: group.id,
         assignedToMe: currentUserId ? assignees.includes(String(currentUserId)) : false,
         todayMs,
         totalMs,
-        lastSessionAt
+        lastSessionAt,
+        dueDate
       });
     }
   }
@@ -189,39 +194,40 @@ async function getItems(groupIds, currentUserId) {
 }
 
 /**
- * Write ONE completed session to Monday with the real start/end timestamps.
- * Returns { ok: true } on success.
- *
- * STEP 0 MUST CONFIRM THIS PAYLOAD. The general accepted form is a column-value
- * mutation that supplies the session's start and end to the time-tracking column.
- * The shape below follows Monday's documented general form but is UNVERIFIED — do
- * not trust real mode until Step 0 confirms a session appears correctly in the
- * Monday web UI and the column is not blanked.
+ * Log a completed session by posting an Update (comment) on the Monday item.
+ * Monday's API does not support writing to the time-tracking column, so we record
+ * sessions as human-readable comments instead.
  */
 async function logSession(itemId, startedAt, endedAt) {
   if (isDemoMode) {
     return { ok: true }; // no-op in demo
   }
-  if (!timeTrackingColumnId) {
-    throw new Error('Time-tracking column id not confirmed (run Step 0).');
-  }
-  const toIso = (ms) => new Date(ms).toISOString().replace('.000Z', ' UTC');
-  // Documented general form: a finished session carries started_at + ended_at.
-  const value = JSON.stringify({
-    started_at: toIso(startedAt),
-    ended_at: toIso(endedAt)
+  const dur = endedAt - startedAt;
+  const h = Math.floor(dur / 3600000);
+  const m = Math.floor((dur % 3600000) / 60000);
+  const s = Math.floor((dur % 60000) / 1000);
+  let durStr;
+  if (h > 0) durStr = `${h}h ${m}m ${s}s`;
+  else if (m > 0) durStr = `${m}m ${s}s`;
+  else durStr = `${s}s`;
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit'
   });
+  const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+  });
+  const body = [
+    'Time Logged',
+    `Duration: ${durStr}`,
+    `Start: ${fmtTime(startedAt)}`,
+    `End: ${fmtTime(endedAt)}`,
+    `Date: ${fmtDate(startedAt)}`
+  ].join('\n');
   await gql(
-    `mutation ($b: ID!, $i: ID!, $vals: JSON!) {
-       change_multiple_column_values(board_id: $b, item_id: $i, column_values: $vals) {
-         id
-       }
+    `mutation ($i: ID!, $body: String!) {
+       create_update(item_id: $i, body: $body) { id }
      }`,
-    {
-      b: boardId,
-      i: itemId,
-      vals: JSON.stringify({ [timeTrackingColumnId]: JSON.parse(value) })
-    }
+    { i: itemId, body }
   );
   return { ok: true };
 }

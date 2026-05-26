@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src https://fonts.gstatic.com" />
   <title>Compu-Mail Timer</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -36,7 +37,7 @@
 
       <!-- Idle -->
       <div id="view-idle" class="view view-idle">
-        <div class="idle-msg">No timer running</div>
+        <div id="idle-recents" class="idle-recents"></div>
         <button id="start-job-btn" class="btn btn-primary">Start a job</button>
       </div>
 
@@ -64,10 +65,7 @@
 
       <!-- Picker -->
       <div id="view-picker" class="view hidden">
-        <div class="seg-row no-drag">
-          <button id="seg-mine" class="seg active">Mine only</button>
-          <button id="seg-all" class="seg">All Priority jobs</button>
-        </div>
+        <div id="filter-row" class="filter-row no-drag"></div>
         <div class="search-wrap">
           <svg class="search-icon" viewBox="0 0 16 16" width="13" height="13"><circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 10 L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
           <input id="search" class="search no-drag" type="text" placeholder="Search jobs or paste a job number" />
