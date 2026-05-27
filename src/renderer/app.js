@@ -271,11 +271,12 @@
     main.appendChild(name);
     main.appendChild(sub);
 
+    const isActive = state.running && job.id === state.itemId;
     const color = groupColor();
 
-    // Color the job number to match the group pill
+    // Only color the job number on the actively running row
     const numSpan = name.querySelector('.job-row-num');
-    if (numSpan) numSpan.style.color = color;
+    if (numSpan && isActive) numSpan.style.color = color;
 
     const play = document.createElement('span');
     play.className = 'job-row-play-pill';
@@ -358,6 +359,9 @@
   }
 
   async function pickJob(job) {
+    // Clear post-stop adjustment state if still active
+    if (stoppedSession) dismissStoppedSummary();
+
     // Clicking the already-active job just returns to the timer (no redundant switch).
     if (state.running && job.id === state.itemId) {
       setView('running');
@@ -423,7 +427,7 @@
         showToast({ text: 'Log failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
       }
     };
-    const onKey = (e) => { if (e.key === 'Enter') doConfirm(); };
+    const onKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doConfirm(); } };
     noteInput.addEventListener('keydown', onKey);
     yes.addEventListener('click', doConfirm, { once: true });
     no.addEventListener('click', cleanup, { once: true });
@@ -629,6 +633,9 @@
       const elapsed = Math.max(0, Date.now() - state.startedAt - (state.subtractedMs || 0));
       const itemId = state.itemId;
       const itemName = state.itemName;
+      // Pre-set stoppedSession before the async call so the pushState from main
+      // (which races with the invoke response) won't transition to idle view.
+      stoppedSession = { itemId, itemName, elapsedMs: elapsed };
       const s = await api.stop();
       applyAfterAction(s);
       showStoppedSummary(itemId, itemName, elapsed);

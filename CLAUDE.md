@@ -28,15 +28,14 @@ Posting to Monday only happens via **Log Time** (single button, posts session + 
 through the `create_update` mutation. Never try to write to the time-tracking column.
 
 ## Status (keep this updated as work progresses)
-- **v2.0.1** shipped but has bugs — see HANDOFF.md for the full list.
+- **v2.0.2** patch: fixed picker job number coloring, play/export hover visibility,
+  post-stop "Done" button leak, post-stop adjustment race, note field (now textarea).
+  Tray icon: added diagnostics (needs real Electron build to verify).
 - Renamed to CM Timer. Brand color red. Idle screen shows "CM Timer" title.
 - Log Time: one button (no menu). Posts session delta, session count, lifetime total, note, date.
 - Comment format: note (if any), `Session (N): Xh Ym`, `Total: Xh Ym`, `MM/DD/YYYY`.
 - X button quits the app. Minimize collapses to pill. All full views share one size.
 - Resize grip uses absolute-delta + `setBounds()` (no feedback loop).
-- **Known bugs in v2.0.1:** job numbers all red (should be group-colored on active only),
-  play/export icons visible when they should be hover-only, post-stop "Done" button state
-  leaks into next session, system tray icon missing, note field too short. See HANDOFF.md.
 - Installer delivered via GitHub Releases at `vioverse-io/monday-timer-widget`.
 
 ## How to verify changes (no Monday token needed)

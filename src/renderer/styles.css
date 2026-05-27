@@ -250,6 +250,13 @@ html, body {
 }
 .search::placeholder { color: var(--text-tertiary); }
 .search:focus { border-color: var(--accent-red); }
+textarea.search {
+  height: auto;
+  padding: 8px 10px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+}
 
 .picker-list { height: calc(100% - 78px); overflow-y: auto; }
 .picker-list::-webkit-scrollbar { width: 6px; }
@@ -293,7 +300,7 @@ html, body {
   height: 26px;
   border-radius: 6px;
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0;
   transition: opacity 0.15s;
 }
 .job-row:hover .job-row-play-pill { opacity: 1; }
@@ -475,10 +482,13 @@ html, body {
   border: 1px solid var(--border-strong);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
   -webkit-app-region: no-drag;
   padding: 0;
+  opacity: 0;
 }
+.job-row:hover .job-row-export { opacity: 1; }
+.job-row.active .job-row-export { opacity: 1; }
 .job-row-export svg { pointer-events: none; }
 .job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
 

@@ -245,8 +245,13 @@ function toggleWidget() {
 // ---------------------------------------------------------------------------
 function trayImage(state) {
   const file = { running: 'tray-green', idle: 'tray-gray', alert: 'tray-red' }[state] || 'tray-gray';
-  const img = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'icons', `${file}.png`));
-  return img.isEmpty() ? nativeImage.createEmpty() : img;
+  const iconPath = path.join(__dirname, 'renderer', 'icons', `${file}.png`);
+  const img = nativeImage.createFromPath(iconPath);
+  if (img.isEmpty()) {
+    log(`tray icon empty: ${iconPath} (exists=${fs.existsSync(iconPath)})`);
+    return nativeImage.createEmpty();
+  }
+  return img;
 }
 function setTrayState(state) {
   trayState = state;
