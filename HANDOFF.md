@@ -47,5 +47,17 @@ longer descriptions. Enter confirms, Shift+Enter inserts newline.
 - Renamed to CM Timer, brand color red, Lucide icons
 - Startup crash fix (stale SIZES reference in restorePosition)
 
+## To do next session
+
+### 1. Create CHANGELOG.md
+Write a project CHANGELOG covering v1.0 through v2.0.2. Summarize what shipped in
+each version.
+
+### 2. Stopped job stays highlighted in picker
+When you stop a job and go back to the picker list, the last-stopped job should remain
+visually highlighted (e.g. "Stopped" or "Paused" label on the row) so you can easily
+find it. Clicking that row starts it right back up. Currently once you stop, there's no
+indication in the picker of what you were just working on — you have to hunt for it.
+
 ## Not bugs — future work
 - v3.0 features in `v3-planning.md` (Numbers column, session log, smart comments)
