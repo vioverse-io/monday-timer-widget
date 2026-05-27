@@ -16,6 +16,7 @@
   let toastTimer = null;
   let stoppedSession = null;  // { itemId, itemName, elapsedMs } — post-stop adjustment window
   let stoppedTimer = null;
+  let lastStoppedItemId = null; // highlights the last-stopped job in the picker
 
   // ---- formatters ----
   const pad = (n) => String(n).padStart(2, '0');
@@ -272,18 +273,30 @@
     main.appendChild(sub);
 
     const isActive = state.running && job.id === state.itemId;
+    const isStopped = !isActive && job.id === lastStoppedItemId;
     const color = groupColor();
+
+    if (isStopped) row.classList.add('stopped');
 
     // Only color the job number on the actively running row
     const numSpan = name.querySelector('.job-row-num');
     if (numSpan && isActive) numSpan.style.color = color;
 
+    // "Stopped" label on the last-stopped row
+    if (isStopped) {
+      const badge = document.createElement('span');
+      badge.className = 'job-row-stopped-badge';
+      badge.textContent = 'Stopped';
+      sub.prepend(badge);
+    }
+
     const play = document.createElement('span');
     play.className = 'job-row-play-pill';
-    play.style.background = color;
-    play.style.color = isLightColor(color) ? '#333' : '#fff';
-    play.innerHTML =
-      '<svg viewBox="0 0 24 24" width="12" height="12"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/></svg>';
+    play.style.background = isStopped ? '#B8860B' : color;
+    play.style.color = isStopped ? '#333' : isLightColor(color) ? '#333' : '#fff';
+    play.innerHTML = isStopped
+      ? '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="12" height="12"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/></svg>';
 
     // Log Time button (clock icon)
     const exp = document.createElement('button');
@@ -374,6 +387,7 @@
       const s = await api.startJob({ itemId: job.id, itemName: job.name });
       applyAfterAction(s);
     }
+    lastStoppedItemId = null;
     setView('running');
   }
 
@@ -636,6 +650,7 @@
       // Pre-set stoppedSession before the async call so the pushState from main
       // (which races with the invoke response) won't transition to idle view.
       stoppedSession = { itemId, itemName, elapsedMs: elapsed };
+      lastStoppedItemId = itemId;
       const s = await api.stop();
       applyAfterAction(s);
       showStoppedSummary(itemId, itemName, elapsed);

@@ -308,6 +308,16 @@ textarea.search {
 .job-row.active { background: var(--bg-secondary); }
 .job-row.active .job-row-name { font-weight: 700; }
 .job-row.active .job-row-play-pill { opacity: 1; }
+/* Last-stopped job: highlighted so the user can find and resume it. */
+.job-row.stopped { background: var(--bg-secondary); border-left: 3px solid var(--accent-yellow); }
+.job-row.stopped .job-row-play-pill { opacity: 1; }
+.job-row-stopped-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-yellow);
+  margin-right: 6px;
+}
 .picker-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 16px; }
 
 /* ---- Collapsed pill ---- */
@@ -506,15 +516,19 @@ textarea.search {
 }
 :root[data-theme="light"] .modal-overlay { background: rgba(31, 42, 64, 0.45); }
 :root[data-theme="light"] .job-row.active { background: #F0F1F3; }
+:root[data-theme="light"] .job-row.stopped { background: #F0F1F3; }
 :root[data-theme="light"] .job-row.active .job-row-name { color: var(--text-primary); font-weight: 700; }
 :root[data-theme="light"] .job-row-export { border-color: #B0B5BF; color: #6B7280; }
 :root[data-theme="light"] .job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
 
 /* ---- Idle branding ---- */
 .idle-title {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--accent-red);
-  letter-spacing: 0.3px;
-  margin-bottom: 4px;
+  letter-spacing: 1.2px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--accent-red);
+  opacity: 0.9;
 }

@@ -13,9 +13,10 @@ and date.
 
 ## Status
 
-- **v2.0.2.** Demo mode and real Monday mode are both working.
+- **v2.0.3.** Demo mode and real Monday mode are both working.
 - One-button **Log Time** replaces the old Export All / Export and Clear.
 - Post-stop adjustment window: -5/-15 min buttons remain active for 10 seconds after stopping.
+- Stopped job highlighted in picker with amber border, "Stopped" badge, and stop icon for easy resume.
 - X quits the app. Minimize collapses to a draggable pill.
 - All views share one user-resizable size. Resize grip uses atomic `setBounds()`.
 - Job picker shows group pills; active job's number is group-colored. Play/export icons appear on hover.

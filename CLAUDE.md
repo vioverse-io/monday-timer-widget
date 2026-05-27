@@ -28,9 +28,9 @@ Posting to Monday only happens via **Log Time** (single button, posts session + 
 through the `create_update` mutation. Never try to write to the time-tracking column.
 
 ## Status (keep this updated as work progresses)
-- **v2.0.2** patch: fixed picker job number coloring, play/export hover visibility,
-  post-stop "Done" button leak, post-stop adjustment race, note field (now textarea).
-  Tray icon: added diagnostics (needs real Electron build to verify).
+- **v2.0.3** patch: stopped-job highlight in picker (amber left border, "Stopped" badge,
+  stop icon instead of play icon on the last-stopped row). Idle title enlarged with
+  red underline accent. CHANGELOG.md added covering v1.0–v2.0.2.
 - Renamed to CM Timer. Brand color red. Idle screen shows "CM Timer" title.
 - Log Time: one button (no menu). Posts session delta, session count, lifetime total, note, date.
 - Comment format: note (if any), `Session (N): Xh Ym`, `Total: Xh Ym`, `MM/DD/YYYY`.
