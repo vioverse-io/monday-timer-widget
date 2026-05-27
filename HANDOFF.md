@@ -1,45 +1,52 @@
-# v2.0.1 Handoff
+# v2.0.1 Handoff — Next Session
 
-Current state: v2.0.1 committed, ready for installer build.
+Current state: v2.0.1 committed, pushed, installer on GitHub Releases. Has bugs below.
 
-## Bugs fixed in v2.0.1
+## Bugs to fix (v2.0.2 patch)
 
-### 1. Export duration double-counting — FIXED
-Replaced Export All + Export and Clear with single **Log Time** button.
-- Posts session delta (time since last log) + lifetime total in one comment
-- Resets deltaMs after every log — no double-counting possible
-- Comment format: note (optional), Session (N): duration, Total: duration, MM/DD/YYYY
+### 1. Job numbers all red in picker
+All job numbers in the Pick a Job list are red. Only the actively running job's number
+should be group-colored. The rest should be the default text color. The bug is in
+`rowEl()` in app.js — it sets every job number's color to `groupColor()` unconditionally.
+Fix: only apply group color to the active row's number, or don't color numbers at all.
 
-### 2. Resize grip feedback loop — FIXED
-Rewrote the grip from incremental deltas to absolute-delta + atomic `setBounds()`.
-- `resizeStart` snapshots window bounds at drag start
-- `resizeTo` sends total delta from start, main computes target and calls `setBounds()` once
-- No more setContentSize + setPosition fighting → no runaway growth
+### 2. Play/export icons should not be always visible
+The play pill and export (clock) button are visible on every row at all times. They
+should only appear on hover (and on the active/playing row). The active row should have
+a gray background fill to distinguish it. Revert the opacity changes in styles.css:
+play pill back to `opacity: 0` with hover/active showing, export button same.
 
-### 3. Comment format — FIXED
-- Removed "Time Logged" header and Export #ID from comments
-- Note is first line (if present), no label prefix
-- Session includes count: `Session (3): 12m 30s`
-- Date is short MM/DD/YYYY format
+### 3. Post-stop "Done" button state leaks
+After stopping a job, the stop button changes to "Done" with a checkmark (the post-stop
+adjustment window). But if you then start a new job or go back to the same job, the
+button stays as "Done" instead of reverting to "Stop". The `stoppedSession` state and
+the button innerHTML are not being cleared when a new job starts.
+Fix: in `applyState()` or `startJob` flow, call `dismissStoppedSummary()` to reset.
 
-### 4. Window behavior — FIXED
-- X button quits the app (was: hide to tray)
-- Minimize collapses to pill (unchanged)
-- All full views (idle, running, picker) share one persisted size — no more size jumps
+### 4. Post-stop adjustment doesn't visually work
+The -5/-15 buttons during the 10-second post-stop window don't appear to function
+properly. Needs testing and debugging on a real Electron build. The `adjustLastSession`
+IPC handler exists in main.js but the renderer flow may not be wiring up correctly.
 
-### 5. Post-stop adjustment window — NEW
-After hitting Stop, the running view stays for 10 seconds with -5/-15 buttons still
-active. Stop button becomes "Done". Auto-dismisses to idle. Adjustments subtract from
-the just-saved session's deltaMs/totalMs.
+### 5. System tray icon missing
+The app no longer shows in the system tray (the arrow popup in the bottom-right).
+The tray is created in `createTray()` which calls `new Tray(trayImage('idle'))`.
+Investigate: is the icon file missing from the packaged build? Is `trayImage` returning
+an empty image? Or is the tray being destroyed by the new `window-all-closed` →
+`app.quit()` flow before it renders?
 
-## UX changes in v2.0.1
+### 6. Note field character limit too short
+The "What did you work on?" input has `maxlength="120"`. Remove the limit — users should
+be able to write any length description. In index.html, remove the `maxlength` attribute.
+Consider making it a textarea instead of a single-line input for longer notes.
 
-- Renamed to **CM Timer** (from Compu-Mail Timer)
-- Brand color (red) on Start button, accents, and idle title
-- Lucide-style icons for play, export/clock, and refresh buttons
-- Play pill always visible (group color), export button always visible with outline
-- Job numbers colored to match group pill
-- Light mode: active row uses gray background with dark bold text
+## What was fixed in v2.0.1 (keep for reference)
+- Export double-counting → single Log Time button (session + total, resets delta)
+- Resize grip feedback loop → absolute deltas + atomic setBounds()
+- Comment format → note first, Session (N), Total, MM/DD/YYYY
+- X quits the app, minimize = pill, all views share one size
+- Renamed to CM Timer, brand color red, Lucide icons
+- Startup crash fix (stale SIZES reference in restorePosition)
 
 ## Not bugs — future work
 - v3.0 features in `v3-planning.md` (Numbers column, session log, smart comments)
