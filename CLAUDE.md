@@ -31,6 +31,9 @@ through the `create_update` mutation. Never try to write to the time-tracking co
 - **v2.0.3** patch: stopped-job highlight in picker (amber left border, "Stopped" badge,
   stop icon instead of play icon on the last-stopped row). Idle title enlarged with
   red underline accent. CHANGELOG.md added covering v1.0–v2.0.2.
+- **Known bugs (v2.0.3)**: Switch button doesn't stop the running job before opening
+  picker; stopped highlight has a 1–2s delay; old stopped highlight lingers briefly
+  when stopping a second job. Details in `HANDOFF.md`.
 - Renamed to CM Timer. Brand color red. Idle screen shows "CM Timer" title.
 - Log Time: one button (no menu). Posts session delta, session count, lifetime total, note, date.
 - Comment format: note (if any), `Session (N): Xh Ym`, `Total: Xh Ym`, `MM/DD/YYYY`.
