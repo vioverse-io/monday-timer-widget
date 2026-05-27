@@ -138,7 +138,7 @@ function sendAlert(payload) {
 function restorePosition() {
   const saved = settings.get('windowPosition');
   const wa = screen.getPrimaryDisplay().workArea;
-  const fallback = { x: wa.x + wa.width - SIZES.idle.w - 20, y: wa.y + 20 };
+  const fallback = { x: wa.x + wa.width - DEFAULT_FULL_SIZE.w - 20, y: wa.y + 20 };
   if (!saved) return fallback;
   const onScreen = screen.getAllDisplays().some((d) => {
     const b = d.bounds;
