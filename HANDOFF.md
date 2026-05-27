@@ -1,6 +1,6 @@
 # v2.0.2 Handoff — Next Session
 
-Current state: v2.0.2 code changes applied, not yet committed or built.
+Current state: v2.0.2 committed and pushed. Installer on GitHub Releases.
 
 ## Fixed in v2.0.2
 
