@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src https://fonts.gstatic.com" />
-  <title>Compu-Mail Timer</title>
+  <title>CM Timer</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -37,6 +37,7 @@
 
       <!-- Idle -->
       <div id="view-idle" class="view view-idle">
+        <div class="idle-title">CM Timer</div>
         <div id="idle-recents-wrap" class="idle-recents-wrap">
           <div id="idle-recents-label" class="section-label hidden">RECENT</div>
           <div id="idle-recents" class="idle-recents"></div>
@@ -76,7 +77,7 @@
         <div class="filter-row-wrap no-drag">
           <div id="filter-row" class="filter-row"></div>
           <button id="refresh-btn" class="icon-btn refresh-btn" title="Refresh jobs">
-            <svg id="refresh-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8a6 6 0 0 1 10.3-4.1L14 2v4h-4l1.6-1.6A4.5 4.5 0 0 0 3.5 8M14 8a6 6 0 0 1-10.3 4.1L2 14v-4h4l-1.6 1.6A4.5 4.5 0 0 0 12.5 8"/></svg>
+            <svg id="refresh-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
           </button>
         </div>
         <div class="search-wrap">
@@ -137,23 +138,17 @@
     <!-- First-run welcome -->
     <div id="welcome" class="modal-overlay hidden">
       <div class="modal">
-        <div class="modal-title">Compu-Mail Timer</div>
+        <div class="modal-title">CM Timer</div>
         <div class="modal-msg">Track time locally and log finished sessions to your Monday board.</div>
         <button class="btn btn-primary modal-btn" id="welcome-connect">Connect to Monday</button>
         <button class="btn btn-switch modal-btn" id="welcome-demo">Try demo mode</button>
       </div>
     </div>
 
-    <!-- Export popover menu (positioned dynamically in JS) -->
-    <div id="export-menu" class="export-menu hidden">
-      <button id="export-all-btn" class="export-menu-item">Export All</button>
-      <button id="export-clear-btn" class="export-menu-item">Export and Clear</button>
-    </div>
-
-    <!-- Export confirmation modal -->
+    <!-- Log Time confirmation modal -->
     <div id="confirm-export" class="modal-overlay hidden">
       <div class="modal">
-        <div class="modal-title">Confirm Export</div>
+        <div class="modal-title">Log Time</div>
         <div id="confirm-export-msg" class="modal-msg"></div>
         <input id="confirm-export-note" class="search no-drag" type="text" maxlength="120" placeholder="What did you work on? (optional)" />
         <button class="btn btn-primary modal-btn" id="confirm-export-yes">Confirm</button>

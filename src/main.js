@@ -15,12 +15,8 @@ const safetyNets = require('./safety-nets');
 
 const isDev = process.argv.includes('--dev');
 
-const SIZES = {
-  idle: { w: 340, h: 220 },
-  running: { w: 340, h: 260 },
-  picker: { w: 340, h: 320 },
-  pill: { w: 120, h: 40 }
-};
+const PILL_SIZE = { w: 120, h: 40 };
+const DEFAULT_FULL_SIZE = { w: 340, h: 260 };
 
 let mainWindow = null;
 let settingsWindow = null;
@@ -159,24 +155,16 @@ function savePosition() {
   savePosTimer = setTimeout(() => settings.set('windowPosition', { x, y }), 400);
 }
 
-// Size for a view = its base size, plus the user's grip-resize delta for full views.
-function userDelta() {
-  const d = settings.get('userSize') || { dw: 0, dh: 0 };
-  return { dw: d.dw || 0, dh: d.dh || 0 };
-}
-function sizeForView(view) {
-  const base = SIZES[view] || SIZES.idle;
-  if (view === 'pill') return { w: base.w, h: base.h };
-  const d = userDelta();
-  return {
-    w: Math.max(280, Math.min(900, base.w + d.dw)),
-    h: Math.max(150, Math.min(1000, base.h + d.dh))
-  };
+// One size for all full views. Pill has its own fixed size.
+function fullViewSize() {
+  const saved = settings.get('fullViewSize');
+  if (saved && saved.w && saved.h) return saved;
+  return DEFAULT_FULL_SIZE;
 }
 
 function createMainWindow() {
   const pos = restorePosition();
-  const start = sizeForView('idle');
+  const start = fullViewSize();
   mainWindow = new BrowserWindow({
     width: start.w,
     height: start.h,
@@ -210,26 +198,36 @@ function createMainWindow() {
   mainWindow.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) log('renderer: ' + message);
   });
-  mainWindow.on('close', (e) => {
-    if (!app.isQuitting) {
-      e.preventDefault();
-      mainWindow.hide();
-      // Close settings window when main widget is hidden.
-      if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
-    }
+  mainWindow.on('close', () => {
+    // X = quit. Close settings window too.
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
+    app.isQuitting = true;
   });
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
 function resizeForView(view) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  const wasPill = currentView === 'pill';
+  const isPill = view === 'pill';
   currentView = view;
   if (view !== 'pill') lastFullView = view;
-  const size = sizeForView(view);
-  const [x, y] = mainWindow.getPosition();
-  mainWindow.setContentSize(size.w, size.h);
-  const [x2, y2] = mainWindow.getPosition();
-  if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
+
+  if (isPill) {
+    // Shrink to pill
+    const [x, y] = mainWindow.getPosition();
+    mainWindow.setContentSize(PILL_SIZE.w, PILL_SIZE.h);
+    const [x2, y2] = mainWindow.getPosition();
+    if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
+  } else if (wasPill) {
+    // Expand from pill — restore saved full-view size
+    const size = fullViewSize();
+    const [x, y] = mainWindow.getPosition();
+    mainWindow.setContentSize(size.w, size.h);
+    const [x2, y2] = mainWindow.getPosition();
+    if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
+  }
+  // Full → full: no resize — size stays consistent
 }
 
 function showWidget() {
@@ -392,6 +390,7 @@ function accumulateSession(session) {
   const jt = settings.getJobTimer(session.itemId);
   jt.totalMs += session.durationMs;
   jt.deltaMs += session.durationMs;
+  jt.sessionCount = (jt.sessionCount || 0) + 1;
   const today = new Date().toDateString();
   if (jt.todayDate === today) {
     jt.todayMs += session.durationMs;
@@ -584,7 +583,7 @@ function openSettingsWindow() {
     height: 600,
     resizable: true,
     frame: true,
-    title: 'Compu-Mail Timer — settings',
+    title: 'CM Timer — Settings',
     backgroundColor: themeBg(effectiveTheme()),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -634,6 +633,17 @@ function registerIpc() {
   ipcMain.handle('undo-switch', () => undoSwitch());
   ipcMain.handle('morning-choice', (_e, choice) => handleMorningChoice(choice));
 
+  ipcMain.handle('adjust-last-session', (_e, { itemId, ms }) => {
+    const jt = settings.getJobTimer(itemId);
+    const subtract = Math.min(ms, Math.max(0, jt.deltaMs));
+    jt.deltaMs -= subtract;
+    jt.totalMs = Math.max(0, jt.totalMs - subtract);
+    jt.todayMs = Math.max(0, jt.todayMs - subtract);
+    settings.setJobTimer(itemId, jt);
+    log(`adjust-last-session item=${itemId} subtracted=${subtract}ms`);
+    return { adjustedMs: subtract };
+  });
+
   ipcMain.handle('subtract-time', (_e, { ms }) => {
     const s = timer.subtractTime(ms);
     persistRunning();
@@ -645,48 +655,36 @@ function registerIpc() {
     const jt = settings.getJobTimer(itemId);
     let runningMs = 0;
     if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
+    // If timer is running on this job, count the current session too
+    const sessions = (jt.sessionCount || 0) + (timer.isRunning() && timer.itemId === itemId ? 1 : 0);
     return {
       deltaMs: jt.deltaMs + runningMs,
       totalMs: jt.totalMs + runningMs,
-      exportCount: jt.exportCount
+      exportCount: jt.exportCount,
+      sessionCount: sessions
     };
   });
 
-  ipcMain.handle('export-all', async (_e, itemId) => {
+  ipcMain.handle('log-time', async (_e, { itemId, note }) => {
     const jt = settings.getJobTimer(itemId);
     let runningMs = 0;
     if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
+    const sessionMs = jt.deltaMs + runningMs;
+    if (sessionMs <= 0) return { ok: false, error: 'No time to log.' };
     const totalMs = jt.totalMs + runningMs;
-    if (totalMs <= 0) return { ok: false, error: 'No time to export.' };
+    // Count current running session if it's this job
+    const sessionCount = (jt.sessionCount || 0) + (timer.isRunning() && timer.itemId === itemId ? 1 : 0);
     const exportId = jt.exportCount + 1;
     try {
-      await api.logExport(itemId, totalMs, exportId);
-      jt.exportCount = exportId;
-      settings.setJobTimer(itemId, jt);
-      log(`export-all item=${itemId} dur=${totalMs}ms export=#${exportId}`);
-      return { ok: true, exportId, durationMs: totalMs };
-    } catch (err) {
-      log(`export-all failed: ${err.message}`);
-      return { ok: false, error: err.message || 'Export failed.' };
-    }
-  });
-
-  ipcMain.handle('export-and-clear', async (_e, { itemId, note }) => {
-    const jt = settings.getJobTimer(itemId);
-    let runningMs = 0;
-    if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
-    const deltaMs = jt.deltaMs + runningMs;
-    if (deltaMs <= 0) return { ok: false, error: 'No time to export.' };
-    const exportId = jt.exportCount + 1;
-    try {
-      await api.logExport(itemId, deltaMs, exportId, note);
-      // Success — now clear local state
+      await api.logExport(itemId, sessionMs, totalMs, sessionCount, note);
+      // Reset delta and session count, keep lifetime total
       jt.exportCount = exportId;
       jt.deltaMs = 0;
       jt.todayMs = 0;
       jt.todayDate = new Date().toDateString();
+      jt.sessionCount = 0;
       settings.setJobTimer(itemId, jt);
-      // If timer is running on this job, reset it to start fresh
+      // If timer is running on this job, reset bases so the clock starts fresh
       if (timer.isRunning() && timer.itemId === itemId) {
         timer.startedAt = Date.now();
         timer.subtractedMs = 0;
@@ -695,37 +693,42 @@ function registerIpc() {
         persistRunning();
         pushState();
       }
-      log(`export-and-clear item=${itemId} dur=${deltaMs}ms export=#${exportId}`);
-      return { ok: true, exportId, durationMs: deltaMs };
+      log(`log-time item=${itemId} session=${sessionMs}ms total=${totalMs}ms export=#${exportId}`);
+      return { ok: true, exportId, sessionMs, totalMs };
     } catch (err) {
-      log(`export-and-clear failed: ${err.message}`);
-      return { ok: false, error: err.message || 'Export failed.' };
+      log(`log-time failed: ${err.message}`);
+      return { ok: false, error: err.message || 'Log failed.' };
     }
   });
 
   ipcMain.on('view-changed', (_e, view) => resizeForView(view));
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
-  ipcMain.on('hide-widget', () => mainWindow && mainWindow.hide());
+  ipcMain.on('quit-app', () => { app.isQuitting = true; app.quit(); });
   // Custom drag/resize for frameless areas that can't use -webkit-app-region.
   ipcMain.on('move-window', (_e, { dx, dy }) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const [x, y] = mainWindow.getPosition();
     mainWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
   });
-  ipcMain.on('resize-by', (_e, { dw, dh }) => {
+  // Resize grip: absolute-delta approach with atomic setBounds to avoid the
+  // feedback loop from incremental setContentSize + setPosition.
+  let resizeDrag = null;
+  ipcMain.on('resize-start', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    resizeDrag = mainWindow.getBounds();
+  });
+  ipcMain.on('resize-to', (_e, { dw, dh }) => {
+    if (!mainWindow || mainWindow.isDestroyed() || !resizeDrag) return;
+    const nw = Math.max(280, Math.min(900, resizeDrag.width + dw));
+    const nh = Math.max(150, Math.min(1000, resizeDrag.height + dh));
+    mainWindow.setBounds({ x: resizeDrag.x, y: resizeDrag.y, width: nw, height: nh });
+  });
+  ipcMain.on('resize-end', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const [w, h] = mainWindow.getContentSize();
-    const nw = Math.max(280, Math.min(900, Math.round(w + dw)));
-    const nh = Math.max(150, Math.min(1000, Math.round(h + dh)));
-    // Pin the top-left corner: setContentSize on a frameless window can shift the
-    // window origin on Windows. Capture position before, restore after.
-    const [x, y] = mainWindow.getPosition();
-    mainWindow.setContentSize(nw, nh);
-    const [x2, y2] = mainWindow.getPosition();
-    if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
-    const base = SIZES[lastFullView] || SIZES.idle;
-    settings.set('userSize', { dw: nw - base.w, dh: nh - base.h });
+    settings.set('fullViewSize', { w, h });
+    resizeDrag = null;
   });
   ipcMain.on('open-settings', openSettingsWindow);
   ipcMain.on('dismiss-banner', () => { bannerVisible = false; pushState(); });
@@ -874,8 +877,8 @@ if (!gotLock) {
     if (process.env.CAPTURE) runCapture();
   });
 
-  app.on('window-all-closed', (e) => {
-    // Keep running in the tray; do not quit when the widget is hidden/closed.
+  app.on('window-all-closed', () => {
+    app.quit();
   });
 
   app.on('before-quit', () => {
@@ -932,10 +935,10 @@ function runCapture() {
 
     // Test: grip resize via the bridge → window grows.
     const before = mainWindow.getContentSize();
-    await mainWindow.webContents.executeJavaScript('window.timerAPI.resizeBy(60, 40)');
+    await mainWindow.webContents.executeJavaScript('window.timerAPI.resizeStart(); window.timerAPI.resizeTo(60, 40); window.timerAPI.resizeEnd();');
     await wait(150);
     const after = mainWindow.getContentSize();
-    console.log(`CAP resizeBy before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+    console.log(`CAP resize before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
     await grab('cap-5-resized.png');
 
     // Hit-test: clicking the visual center of each topbar icon must resolve to the

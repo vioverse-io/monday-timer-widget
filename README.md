@@ -1,22 +1,25 @@
-# Compu-Mail Timer
+# CM Timer
 
 A frameless, always-on-top Windows desktop widget that tracks time **locally** and logs
-completed sessions as **comments** on a Monday.com board. It keeps the active job
-visible at all times and makes switching jobs a one-click action.
+session totals as **comments** on a Monday.com board. Built for Compu-Mail. It keeps
+the active job visible at all times and makes switching jobs a one-click action.
 
 ## Why local-clock + comments
 
 Monday's API **cannot** write to the time-tracking column (mutations blank it). The
-widget owns the clock on the user's machine. When a session ends (stop, switch,
-auto-stop, etc.) it posts a **comment (Update)** on the Monday item with the duration
-and start/end times in a clean multi-line format (duration, start, end, date).
+widget owns the clock on the user's machine. **Log Time** posts a comment on the Monday
+item showing the session duration (with session count), lifetime total, optional note,
+and date.
 
 ## Status
 
-- **Demo mode and real Monday mode are both working.**
-- Sessions are logged as comments via `create_update` mutation.
-- Job picker shows group pills (Priority, Low Priority, Declined, etc.) pulled from
-  the board API. No manual group configuration needed.
+- **v2.0.1.** Demo mode and real Monday mode are both working.
+- One-button **Log Time** replaces the old Export All / Export and Clear.
+- Post-stop adjustment window: -5/-15 min buttons remain active for 10 seconds after stopping.
+- X quits the app. Minimize collapses to a draggable pill.
+- All views share one user-resizable size. Resize grip uses atomic `setBounds()`.
+- Job picker shows group pills with group-colored job numbers and Lucide icons.
+- Brand color (red) on primary buttons.
 
 ## Run it
 
@@ -61,8 +64,8 @@ npm run dist     # → dist/CompuMailTimer-Setup-<version>.exe
 
 Building a Windows `.exe` from WSL2 may require `wine`. If `npm run dist` fails on
 packaging, install `wine` and retry, or build from PowerShell on the Windows side with
-Node installed there. Code signing is not configured for v1 — Windows SmartScreen will
-warn on first install ("More info → Run anyway").
+Node installed there. Code signing is not configured — Windows SmartScreen will warn on first install
+("More info → Run anyway").
 
 Tray/app icons are generated (no design tools needed): `node build/gen-icons.js`.
 
@@ -91,8 +94,7 @@ shutdown can't lose it — that record is what crash recovery and the morning ch
 Failed Monday writes go to a persisted retry queue and are retried on a backoff and on the
 next user action; the local timer keeps running regardless of network state.
 
-## Out of scope for v1
+## Future (v3)
 
-Session notes, multi-board, Mac/Linux builds, auto-update, reporting, subitem tracking,
-reversing a written session via Undo (Undo restores which job is tracked, not the prior
-write), custom themes.
+Numbers column for cumulative time, session log, smart comments, multi-board,
+Mac/Linux builds, auto-update. See `v3-planning.md`.

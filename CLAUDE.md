@@ -1,4 +1,4 @@
-# Compu-Mail Timer — project guide for Claude Code
+# CM Timer — project guide for Claude Code
 
 ## How to open this project in a terminal (WSL Ubuntu)
 Always `cd` into this folder first so Claude can see the files.
@@ -24,17 +24,20 @@ v3 planning: `v3-planning.md`.
 ## Non-negotiable design rule (local-clock model)
 Monday's API cannot write to the time-tracking column at all (mutations blank it).
 The widget **owns the clock**. Stop/switch accumulate time locally — no API call.
-Posting to Monday only happens via **manual Export** (Export All or Export and Clear)
+Posting to Monday only happens via **Log Time** (single button, posts session + total)
 through the `create_update` mutation. Never try to write to the time-tracking column.
 
 ## Status (keep this updated as work progresses)
-- **v2.0.0.** Demo mode: complete. Real Monday mode: working.
-- Stop/switch save time locally. Exports post comments to Monday via `create_update`.
-- Export and Clear resets the job's delta; Export All posts lifetime total.
-- Per-job data persisted in `jobTimers` (electron-store): totalMs, deltaMs, exportCount.
-- Export comments include sequential Export #ID, duration, date, optional note.
-- Job picker uses group pills with refresh button. Distraction recovery (-5/-15 min).
-- Today/Total in tracking view reflect unexported delta, not lifetime.
+- **v2.0.1.** Renamed to CM Timer. Demo mode: complete. Real Monday mode: working.
+- Stop/switch accumulate time locally. **Log Time** posts comments to Monday via `create_update`.
+- Log Time: one button (no menu). Posts session delta, session count, lifetime total, note, date.
+- Comment format: note (if any), `Session (N): Xh Ym`, `Total: Xh Ym`, `MM/DD/YYYY`.
+- Per-job data persisted in `jobTimers` (electron-store): totalMs, deltaMs, exportCount, sessionCount.
+- Post-stop adjustment: after hitting Stop, -5/-15 buttons remain active for 10 seconds.
+- X button quits the app. Minimize collapses to pill. All full views share one size.
+- Resize grip uses absolute-delta + `setBounds()` (no feedback loop).
+- Job picker: group pills, Lucide icons, group-colored job numbers, always-visible play/export buttons.
+- Brand color (red) on primary buttons and accents. Idle screen shows "CM Timer" title.
 - Installer delivered via GitHub Releases at `vioverse-io/monday-timer-widget`.
 
 ## How to verify changes (no Monday token needed)
@@ -61,16 +64,17 @@ times out, run `wineboot --init` once first, then rebuild. Unsigned → SmartScr
 - Frameless window: interactive elements must be `-webkit-app-region: no-drag` (and SVGs
   inside buttons need `pointer-events:none`) or clicks get swallowed. The pill and resize
   grip use JS pointer-drag, not app-region.
-- Window is `resizable:true` so `setContentSize` works both directions; per-view sizes plus
-  a persisted user `userSize` delta (only set by the grip, not the `resize` event).
-  `setContentSize` on frameless Windows shifts the origin — all callers pin position after.
+- Window is `resizable:true` so programmatic sizing works both directions. All full views
+  share one persisted size (`fullViewSize`). Resize grip uses `setBounds()` atomically
+  (absolute deltas from drag start) to avoid the feedback loop from incremental
+  `setContentSize` + `setPosition`. X button quits; minimize collapses to pill.
 - API token encrypted via `safeStorage` (tied to Windows user account, survives reinstalls
   on the same machine). Logs in `userData/logs` (weekly rotation).
 - Job picker pulls all groups from the board API; filter pills are built dynamically with
   each group's Monday color. No manual group configuration in settings.
 - Jobs sorted by due date (earliest first). Recents on idle screen use persisted history.
 - Time: **Today** = local-day-clipped unexported delta; **Total** = full unexported delta
-  (time since last Export and Clear). Timezone EST.
+  (time since last Log Time). Timezone EST.
 - Monday's API cannot write to the time-tracking column. Do not attempt it. Exports are
   posted as comments via `create_update` mutation. Other column types (Numbers, Text) can
   be written via `change_column_value` — planned for v3 (see `v3-planning.md`).

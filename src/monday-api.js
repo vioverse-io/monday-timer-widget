@@ -241,27 +241,25 @@ async function logSession(itemId, startedAt, endedAt) {
  * @param {number} exportId    sequential export number (e.g. 1, 2, 3)
  * @param {string} [note]      optional one-line note (omitted from comment if empty)
  */
-async function logExport(itemId, durationMs, exportId, note) {
+async function logExport(itemId, sessionMs, totalMs, sessionCount, note) {
   if (isDemoMode) {
     return { ok: true };
   }
-  const h = Math.floor(durationMs / 3600000);
-  const m = Math.floor((durationMs % 3600000) / 60000);
-  const s = Math.floor((durationMs % 60000) / 1000);
-  let durStr;
-  if (h > 0) durStr = `${h}h ${m}m`;
-  else durStr = `${m}m ${s}s`;
-  const fmtDate = () => new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
-  });
-  const lines = [
-    'Time Logged',
-    `Export #${String(exportId).padStart(3, '0')}`,
-    `Duration: ${durStr}`
-  ];
+  function fmtDur(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m ${s}s`;
+  }
+  const now = new Date();
+  const fmtDate = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`;
+  const lines = [];
   const trimmed = (note || '').trim();
-  if (trimmed) lines.push(`Note: ${trimmed}`);
-  lines.push(`Date: ${fmtDate()}`);
+  if (trimmed) lines.push(trimmed);
+  lines.push(`Session (${sessionCount || 1}): ${fmtDur(sessionMs)}`);
+  lines.push(`Total: ${fmtDur(totalMs)}`);
+  lines.push(fmtDate);
   const body = lines.join('\n');
   await gql(
     `mutation ($i: ID!, $body: String!) {

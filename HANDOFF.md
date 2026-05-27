@@ -1,40 +1,45 @@
-# v2.0.0 Handoff — Next Session
+# v2.0.1 Handoff
 
-Current state: v2.0.0 committed, pushed, installer published on GitHub Releases.
+Current state: v2.0.1 committed, ready for installer build.
 
-## Bugs to fix (v2.0.1 patch)
+## Bugs fixed in v2.0.1
 
-### 1. Export and Clear duration is wrong
-After doing an Export All followed by an Export and Clear, the Export and Clear
-posted the full lifetime total instead of just the delta since the last clear.
-Expected: if you do Export All (shows 10m total), then run 6 more seconds and
-Export and Clear, the comment should show ~6s, not 10m. Likely a bug in how
-deltaMs is calculated or reset after Export All — investigate the interaction
-between the two export paths in main.js.
+### 1. Export duration double-counting — FIXED
+Replaced Export All + Export and Clear with single **Log Time** button.
+- Posts session delta (time since last log) + lifetime total in one comment
+- Resets deltaMs after every log — no double-counting possible
+- Comment format: note (optional), Session (N): duration, Total: duration, MM/DD/YYYY
 
-### 2. Resize grip is worse
-The position-pinning fix (setContentSize + setPosition restore) is causing new
-problems:
-- Holding the grip makes the window grow larger and larger uncontrollably
-- Window sizes are inconsistent across views (idle → picker → running may each
-  render at different sizes after the user resizes one of them)
-- Making the idle view smaller, then starting a job, causes the picker to be a
-  different size
+### 2. Resize grip feedback loop — FIXED
+Rewrote the grip from incremental deltas to absolute-delta + atomic `setBounds()`.
+- `resizeStart` snapshots window bounds at drag start
+- `resizeTo` sends total delta from start, main computes target and calls `setBounds()` once
+- No more setContentSize + setPosition fighting → no runaway growth
 
-Root cause is likely the position restore fighting with the incremental delta
-tracking in the renderer. The grip sends screen-coordinate deltas, but if
-setPosition shifts the window, the next pointermove delta is wrong (double-counted).
-May need to rethink the approach — possibly use setBounds() atomically instead of
-separate setContentSize + setPosition calls.
+### 3. Comment format — FIXED
+- Removed "Time Logged" header and Export #ID from comments
+- Note is first line (if present), no label prefix
+- Session includes count: `Session (3): 12m 30s`
+- Date is short MM/DD/YYYY format
 
-### 3. Comments display / ordering
-The Monday comment content and ordering needs review. User wants to look at what's
-being posted and may want to edit the format. Discuss with user before changing.
+### 4. Window behavior — FIXED
+- X button quits the app (was: hide to tray)
+- Minimize collapses to pill (unchanged)
+- All full views (idle, running, picker) share one persisted size — no more size jumps
 
-### 4. Opening dialog / job list UX
-The initial view and job list layout feels unintuitive. User wants to plan this out
-further before implementing. Wait for their direction.
+### 5. Post-stop adjustment window — NEW
+After hitting Stop, the running view stays for 10 seconds with -5/-15 buttons still
+active. Stop button becomes "Done". Auto-dismisses to idle. Adjustments subtract from
+the just-saved session's deltaMs/totalMs.
+
+## UX changes in v2.0.1
+
+- Renamed to **CM Timer** (from Compu-Mail Timer)
+- Brand color (red) on Start button, accents, and idle title
+- Lucide-style icons for play, export/clock, and refresh buttons
+- Play pill always visible (group color), export button always visible with outline
+- Job numbers colored to match group pill
+- Light mode: active row uses gray background with dark bold text
 
 ## Not bugs — future work
 - v3.0 features in `v3-planning.md` (Numbers column, session log, smart comments)
-- These are not for the next session unless the user brings them up

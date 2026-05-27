@@ -191,24 +191,32 @@
       emit('state', appState());
       return Promise.resolve(appState());
     },
+    adjustLastSession: (itemId, ms) => {
+      const jt = getJT(itemId);
+      const subtract = Math.min(ms, Math.max(0, jt.deltaMs));
+      jt.deltaMs -= subtract;
+      jt.totalMs = Math.max(0, jt.totalMs - subtract);
+      jt.todayMs = Math.max(0, jt.todayMs - subtract);
+      return Promise.resolve({ adjustedMs: subtract });
+    },
     getExportInfo: (itemId) => {
       const jt = getJT(itemId);
       let runningMs = 0;
       if (T.running && T.itemId === itemId) runningMs = Math.max(0, Date.now() - T.startedAt - T.subtractedMs);
-      return Promise.resolve({ deltaMs: jt.deltaMs + runningMs, totalMs: jt.totalMs + runningMs, exportCount: jt.exportCount });
+      const sessions = (jt.sessionCount || 0) + (T.running && T.itemId === itemId ? 1 : 0);
+      return Promise.resolve({ deltaMs: jt.deltaMs + runningMs, totalMs: jt.totalMs + runningMs, exportCount: jt.exportCount, sessionCount: sessions });
     },
-    exportAll: (itemId) => {
+    logTime: (itemId, note) => {
       const jt = getJT(itemId);
       jt.exportCount += 1;
-      return Promise.resolve({ ok: true, exportId: jt.exportCount, durationMs: jt.totalMs });
-    },
-    exportAndClear: (itemId, note) => {
-      const jt = getJT(itemId);
-      jt.exportCount += 1;
-      const dur = jt.deltaMs;
+      let runningMs = 0;
+      if (T.running && T.itemId === itemId) runningMs = Math.max(0, Date.now() - T.startedAt - T.subtractedMs);
+      const sessionMs = jt.deltaMs + runningMs;
+      const totalMs = jt.totalMs + runningMs;
       jt.deltaMs = 0;
       jt.todayMs = 0;
       jt.todayDate = new Date().toDateString();
+      jt.sessionCount = 0;
       if (T.running && T.itemId === itemId) {
         T.startedAt = Date.now();
         T.subtractedMs = 0;
@@ -216,14 +224,16 @@
         T.totalMsBase = 0;
         emit('state', appState());
       }
-      return Promise.resolve({ ok: true, exportId: jt.exportCount, durationMs: dur });
+      return Promise.resolve({ ok: true, exportId: jt.exportCount, sessionMs, totalMs });
     },
     viewChanged: () => {},
     collapse: () => {},
     expand: () => {},
     moveWindow: () => {},
-    resizeBy: () => {},
-    hideWidget: () => {},
+    resizeStart: () => {},
+    resizeTo: () => {},
+    resizeEnd: () => {},
+    quitApp: () => { window.close(); },
     openSettings: () => alert('Settings window (Electron only)'),
     dismissBanner: () => { T.bannerVisible = false; },
     refreshJobs: () => {},

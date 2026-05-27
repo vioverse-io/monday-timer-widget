@@ -14,7 +14,8 @@
   let jobs = { all: [], groups: [] };
   let tickInterval = null;
   let toastTimer = null;
-  let exportMenuTarget = null;  // itemId for the currently open export menu
+  let stoppedSession = null;  // { itemId, itemName, elapsedMs } — post-stop adjustment window
+  let stoppedTimer = null;
 
   // ---- formatters ----
   const pad = (n) => String(n).padStart(2, '0');
@@ -168,15 +169,17 @@
     }
 
     // Auto view transition only when on a base view (don't yank user out of picker/pill).
-    if (view === 'idle' || view === 'running') {
+    // Don't switch away from running view during the post-stop adjustment window.
+    if ((view === 'idle' || view === 'running') && !stoppedSession) {
       setView(s.running ? 'running' : 'idle');
     } else {
       $('topbar-label').textContent =
-        view === 'picker' ? 'PICK A JOB' : s.running ? 'TRACKING' : 'NO TIMER';
+        view === 'picker' ? 'PICK A JOB' : s.running ? 'TRACKING'
+        : stoppedSession ? 'STOPPED' : 'NO TIMER';
     }
 
     if (s.running) startTick();
-    else { stopTick(); renderIdleRecents(); }
+    else { stopTick(); if (!stoppedSession) renderIdleRecents(); }
   }
 
   function renderIdleRecents() {
@@ -269,22 +272,27 @@
     main.appendChild(sub);
 
     const color = groupColor();
+
+    // Color the job number to match the group pill
+    const numSpan = name.querySelector('.job-row-num');
+    if (numSpan) numSpan.style.color = color;
+
     const play = document.createElement('span');
     play.className = 'job-row-play-pill';
     play.style.background = color;
     play.style.color = isLightColor(color) ? '#333' : '#fff';
     play.innerHTML =
-      '<svg viewBox="0 0 16 16" width="10" height="10"><path d="M5 3 L12 8 L5 13 Z" fill="currentColor"/></svg>';
+      '<svg viewBox="0 0 24 24" width="12" height="12"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/></svg>';
 
-    // Export button (upload icon)
+    // Log Time button (clock icon)
     const exp = document.createElement('button');
     exp.className = 'job-row-export';
-    exp.title = 'Export time';
+    exp.title = 'Log time';
     exp.innerHTML =
-      '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V3M5 5l3-3 3 3M3 13h10"/></svg>';
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
     exp.addEventListener('click', (e) => {
       e.stopPropagation();
-      openExportMenu(job, exp);
+      doLogTime(job.id);
     });
 
     row.appendChild(main);
@@ -380,43 +388,18 @@
 
   // (group pill filtering replaces the old mine/all scope toggle)
 
-  // ---- export menu ----
-  function openExportMenu(job, anchorEl) {
-    const menu = $('export-menu');
-    exportMenuTarget = job.id;
-    // Position near the anchor button
-    const rect = anchorEl.getBoundingClientRect();
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.right = (window.innerWidth - rect.right) + 'px';
-    menu.style.left = '';
-    menu.classList.remove('hidden');
-  }
-  function closeExportMenu() {
-    $('export-menu').classList.add('hidden');
-    exportMenuTarget = null;
-  }
-
-  async function doExportAll(itemId) {
-    closeExportMenu();
-    const result = await api.exportAll(itemId);
-    if (result.ok) {
-      showToast({ text: `Export #${String(result.exportId).padStart(3, '0')} posted`, durationMs: 4000 });
-    } else {
-      showToast({ text: 'Export failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
-    }
-  }
-
-  async function doExportAndClear(itemId) {
-    closeExportMenu();
-    // Get current delta for confirmation
+  // ---- log time ----
+  async function doLogTime(itemId) {
     const info = await api.getExportInfo(itemId);
     if (info.deltaMs <= 0) {
-      showToast({ text: 'No unexported time on this job.', durationMs: 4000 });
+      showToast({ text: 'No time to log on this job.', durationMs: 4000 });
       return;
     }
-    const durStr = fmtToday(info.deltaMs);
+    const sessionStr = fmtToday(info.deltaMs);
+    const totalStr = fmtToday(info.totalMs);
+    const sc = info.sessionCount || 1;
     $('confirm-export-msg').textContent =
-      `Post ${durStr} to Monday and reset the timer for this job?`;
+      `Log ${sessionStr} (${sc} session${sc !== 1 ? 's' : ''}) to Monday? Total: ${totalStr}`;
     const noteInput = $('confirm-export-note');
     noteInput.value = '';
     $('confirm-export').classList.remove('hidden');
@@ -433,11 +416,11 @@
     const doConfirm = async () => {
       const note = noteInput.value.trim();
       cleanup();
-      const result = await api.exportAndClear(itemId, note);
+      const result = await api.logTime(itemId, note);
       if (result.ok) {
-        showToast({ text: `Export #${String(result.exportId).padStart(3, '0')} posted — timer reset`, durationMs: 4000 });
+        showToast({ text: 'Time logged to Monday', durationMs: 4000 });
       } else {
-        showToast({ text: 'Export failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
+        showToast({ text: 'Log failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
       }
     };
     const onKey = (e) => { if (e.key === 'Enter') doConfirm(); };
@@ -467,6 +450,53 @@
     flash.offsetHeight; // reflow
     flash.style.animation = '';
     setTimeout(() => flash.classList.add('hidden'), 1000);
+  }
+
+  // ---- post-stop adjustment window ----
+  function showStoppedSummary(itemId, itemName, elapsedMs) {
+    stoppedSession = { itemId, itemName, elapsedMs };
+    renderJob(itemName);
+    $('elapsed').textContent = fmtClock(elapsedMs);
+    $('today').textContent = '';
+    $('total').textContent = 'Session logged';
+    $('topbar-label').textContent = 'STOPPED';
+    setDot(false);
+    // Change Stop to Done
+    $('stop-btn').innerHTML =
+      '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Done';
+    clearTimeout(stoppedTimer);
+    stoppedTimer = setTimeout(dismissStoppedSummary, 10000);
+  }
+
+  function dismissStoppedSummary() {
+    if (!stoppedSession) return;
+    stoppedSession = null;
+    clearTimeout(stoppedTimer);
+    // Restore Stop button
+    $('stop-btn').innerHTML =
+      '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg> Stop';
+    setView('idle');
+  }
+
+  function adjustStoppedSession(ms, label) {
+    if (!stoppedSession) return;
+    api.adjustLastSession(stoppedSession.itemId, ms);
+    stoppedSession.elapsedMs = Math.max(0, stoppedSession.elapsedMs - ms);
+    $('elapsed').textContent = fmtClock(stoppedSession.elapsedMs);
+    // Visual feedback (same as live subtract)
+    const el = $('elapsed');
+    el.classList.add('elapsed-flash');
+    setTimeout(() => el.classList.remove('elapsed-flash'), 400);
+    const flash = $('distract-flash');
+    flash.textContent = label;
+    flash.classList.remove('hidden');
+    flash.style.animation = 'none';
+    flash.offsetHeight;
+    flash.style.animation = '';
+    setTimeout(() => flash.classList.add('hidden'), 1000);
+    // Reset auto-dismiss timer
+    clearTimeout(stoppedTimer);
+    stoppedTimer = setTimeout(dismissStoppedSummary, 10000);
   }
 
   // ---- refresh jobs ----
@@ -552,63 +582,70 @@
   }
 
   // ---- resize grip (bottom-right) ----
+  // Uses absolute deltas from drag start + setBounds on main to avoid the
+  // feedback loop that incremental setContentSize + setPosition caused.
   function bindResizeGrip() {
     const grip = $('resize-grip');
     let drag = null;
     grip.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { grip.setPointerCapture(e.pointerId); } catch (_) { /* synthetic/edge */ }
-      drag = { x: e.screenX, y: e.screenY, started: false };
+      drag = { startX: e.screenX, startY: e.screenY, started: false };
+      api.resizeStart();
     });
     grip.addEventListener('pointermove', (e) => {
       if (!drag) return;
-      const dw = e.screenX - drag.x;
-      const dh = e.screenY - drag.y;
-      // Require real movement before resizing (ignore sub-pixel jitter).
+      const dw = e.screenX - drag.startX;
+      const dh = e.screenY - drag.startY;
       if (!drag.started && Math.abs(dw) < 3 && Math.abs(dh) < 3) return;
       drag.started = true;
-      drag.x = e.screenX;
-      drag.y = e.screenY;
-      api.resizeBy(dw, dh);
+      api.resizeTo(dw, dh);
     });
-    grip.addEventListener('pointerup', () => { drag = null; });
+    grip.addEventListener('pointerup', () => {
+      if (drag && drag.started) api.resizeEnd();
+      drag = null;
+    });
   }
 
   // ---- events binding ----
   function bind() {
     $('settings-btn').addEventListener('click', () => api.openSettings());
     $('min-btn').addEventListener('click', () => setView('pill'));
-    $('close-btn').addEventListener('click', () => api.hideWidget());
+    $('close-btn').addEventListener('click', () => api.quitApp());
     $('back-btn').addEventListener('click', closePicker);
 
     $('start-job-btn').addEventListener('click', () => openPicker('start'));
-    $('switch-btn').addEventListener('click', () => openPicker('switch'));
+    $('switch-btn').addEventListener('click', () => {
+      if (stoppedSession) dismissStoppedSummary();
+      openPicker('switch');
+    });
     $('stop-btn').addEventListener('click', async () => {
+      if (stoppedSession) {
+        // "Done" button during post-stop summary
+        dismissStoppedSummary();
+        return;
+      }
+      // Capture session info before stopping
+      const elapsed = Math.max(0, Date.now() - state.startedAt - (state.subtractedMs || 0));
+      const itemId = state.itemId;
+      const itemName = state.itemName;
       const s = await api.stop();
       applyAfterAction(s);
-      setView('idle');
+      showStoppedSummary(itemId, itemName, elapsed);
     });
 
-    // Distraction recovery
-    $('sub5-btn').addEventListener('click', () => subtractTime(5 * 60 * 1000, '-5:00'));
-    $('sub15-btn').addEventListener('click', () => subtractTime(15 * 60 * 1000, '-15:00'));
+    // Distraction recovery — works both while running and during post-stop adjustment
+    $('sub5-btn').addEventListener('click', () => {
+      if (stoppedSession) adjustStoppedSession(5 * 60 * 1000, '-5:00');
+      else subtractTime(5 * 60 * 1000, '-5:00');
+    });
+    $('sub15-btn').addEventListener('click', () => {
+      if (stoppedSession) adjustStoppedSession(15 * 60 * 1000, '-15:00');
+      else subtractTime(15 * 60 * 1000, '-15:00');
+    });
 
     // Refresh jobs
     $('refresh-btn').addEventListener('click', () => refreshJobs());
-
-    // Export menu items
-    $('export-all-btn').addEventListener('click', () => {
-      if (exportMenuTarget) doExportAll(exportMenuTarget);
-    });
-    $('export-clear-btn').addEventListener('click', () => {
-      if (exportMenuTarget) doExportAndClear(exportMenuTarget);
-    });
-    // Close export menu on outside click
-    document.addEventListener('click', (e) => {
-      if (exportMenuTarget && !$('export-menu').contains(e.target) && !e.target.closest('.job-row-export')) {
-        closeExportMenu();
-      }
-    });
 
     bindPill();
     bindResizeGrip();
@@ -638,7 +675,6 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && view === 'picker') closePicker();
-      if (e.key === 'Escape' && exportMenuTarget) closeExportMenu();
     });
 
     api.onState(applyState);

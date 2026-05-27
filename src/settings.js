@@ -127,7 +127,7 @@ function pushRecent(itemId) {
 
 function getJobTimer(itemId) {
   const all = store.get('jobTimers') || {};
-  return all[itemId] || { totalMs: 0, deltaMs: 0, exportCount: 0, todayMs: 0, todayDate: null };
+  return all[itemId] || { totalMs: 0, deltaMs: 0, exportCount: 0, todayMs: 0, todayDate: null, sessionCount: 0 };
 }
 
 function setJobTimer(itemId, data) {

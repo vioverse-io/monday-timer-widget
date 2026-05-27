@@ -22,7 +22,7 @@ class TimerEngine extends EventEmitter {
     this.itemName = null;
     this.startedAt = null;
     this.todayMsBase = 0; // ms already logged on this item today (local)
-    this.totalMsBase = 0; // ms already logged (delta since last export-and-clear)
+    this.totalMsBase = 0; // ms already logged (delta since last Log Time)
     this.subtractedMs = 0; // distraction recovery: ms removed from this session
   }
 

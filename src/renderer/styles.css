@@ -185,7 +185,7 @@ html, body {
   gap: 6px;
   border: 1px solid transparent;
 }
-.btn-primary { background: var(--accent-blue); color: #fff; border: none; border-radius: 20px; padding: 8px 20px; }
+.btn-primary { background: var(--accent-red); color: #fff; border: none; border-radius: 20px; padding: 8px 20px; }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn-stop { flex: 1; background: var(--accent-red); color: #fff; border: none; }
 .btn-stop:hover { filter: brightness(1.08); }
@@ -249,7 +249,7 @@ html, body {
   outline: none;
 }
 .search::placeholder { color: var(--text-tertiary); }
-.search:focus { border-color: var(--accent-blue); }
+.search:focus { border-color: var(--accent-red); }
 
 .picker-list { height: calc(100% - 78px); overflow-y: auto; }
 .picker-list::-webkit-scrollbar { width: 6px; }
@@ -293,15 +293,14 @@ html, body {
   height: 26px;
   border-radius: 6px;
   flex-shrink: 0;
-  opacity: 0;
+  opacity: 0.7;
   transition: opacity 0.15s;
 }
 .job-row:hover .job-row-play-pill { opacity: 1; }
-/* Currently-running job: green tint background + green accents. */
-.job-row.active { background: rgba(0, 200, 117, 0.12); }
-.job-row.active .job-row-num { color: var(--accent-green); }
-.job-row.active .job-row-name { color: #fff; }
-.job-row.active .job-row-play-pill { opacity: 1; background: var(--accent-green) !important; color: #fff !important; }
+/* Currently-running job: subtle highlight, group colors preserved via inline style. */
+.job-row.active { background: var(--bg-secondary); }
+.job-row.active .job-row-name { font-weight: 700; }
+.job-row.active .job-row-play-pill { opacity: 1; }
 .picker-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 16px; }
 
 /* ---- Collapsed pill ---- */
@@ -362,7 +361,7 @@ html, body {
 .toast-undo {
   background: none;
   border: none;
-  color: var(--accent-blue);
+  color: var(--accent-red);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -463,34 +462,7 @@ html, body {
   to { transform: rotate(360deg); }
 }
 
-/* ---- Export menu popover ---- */
-.export-menu {
-  position: absolute;
-  z-index: 25;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  min-width: 140px;
-}
-.export-menu-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-family: inherit;
-  padding: 6px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-.export-menu-item:hover { background: var(--bg-tertiary); }
-
-/* ---- Export button on job rows ---- */
+/* ---- Log Time button on job rows ---- */
 .job-row-export {
   display: inline-flex;
   align-items: center;
@@ -500,17 +472,15 @@ html, body {
   border-radius: 6px;
   flex-shrink: 0;
   background: none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   color: var(--text-secondary);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
+  transition: border-color 0.15s, color 0.15s;
   -webkit-app-region: no-drag;
   padding: 0;
 }
 .job-row-export svg { pointer-events: none; }
-.job-row:hover .job-row-export { opacity: 1; }
-.job-row-export:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+.job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
 
 /* ---- Light theme (Monday-like): overrides the dark defaults ---- */
 :root[data-theme="light"] {
@@ -525,3 +495,16 @@ html, body {
   /* accent colors stay the same in both themes */
 }
 :root[data-theme="light"] .modal-overlay { background: rgba(31, 42, 64, 0.45); }
+:root[data-theme="light"] .job-row.active { background: #F0F1F3; }
+:root[data-theme="light"] .job-row.active .job-row-name { color: var(--text-primary); font-weight: 700; }
+:root[data-theme="light"] .job-row-export { border-color: #B0B5BF; color: #6B7280; }
+:root[data-theme="light"] .job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+/* ---- Idle branding ---- */
+.idle-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-red);
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
