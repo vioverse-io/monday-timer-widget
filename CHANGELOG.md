@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.1.0
+- **UI redesign** per Claude Design handoff — compact, content-sized views with a cleaner, calmer design system.
+- **Hero timer**: 48px monospace clock (JetBrains Mono) — the running time is now the focal point of the tracking view.
+- **Integrated titlebar**: transparent background with hairline divider, pulsing green status dot when tracking, muted gray dot when idle.
+- **Auto-sized views**: window snaps to content height per view (idle 300px, running 248px, picker 480px) — no more dead space.
+- **Job-number chips**: red/pink chip on tracking view (replaces large green number), idle recents, and minimized pill.
+- **Branded idle screen**: left-aligned with red tile + "CM Timer" wordmark, full-width "Start a job" CTA with play icon, job-number chips on recent rows (replaces bullet dots).
+- **Redesigned pill**: rounded capsule (22px radius) with border/shadow, showing job number between the status dot and elapsed time.
+- **New color token system**: `--hairline`, `--text-body`, `--chip-bg/fg`, `--ctrl-icon`, `--idle-dot`, `--neutral-chip-bg/fg`, `--distract-bg` with refined dark and light themes.
+- **Restyled components**: Stop/Switch buttons (38px, 9px radius), distraction buttons (30px, 8px radius, hairline border), borderless filter pills (8px radius), search field (36px, 9px radius), lighter job-row dividers, bold totals values.
+- Light theme: Switch button uses white background; pill uses lighter shadow.
+- Design reference in `Monday timer widget design/design_handoff_ui_redesign/`.
+
 ## v2.0.3
 - **Stopped job highlighted in picker**: after stopping, the last-stopped row shows an amber left border, "Stopped" badge, and stop-square icon (amber) instead of the play triangle. Easy to find and resume with one click. Highlight clears when any job is picked.
 - Idle screen "CM Timer" title enlarged (20px) with red underline accent.

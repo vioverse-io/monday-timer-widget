@@ -28,16 +28,20 @@ Posting to Monday only happens via **Log Time** (single button, posts session + 
 through the `create_update` mutation. Never try to write to the time-tracking column.
 
 ## Status (keep this updated as work progresses)
-- **v2.0.3** patch: stopped-job highlight in picker (amber left border, "Stopped" badge,
-  stop icon instead of play icon on the last-stopped row). Idle title enlarged with
-  red underline accent. CHANGELOG.md added covering v1.0–v2.0.2.
-- **Known bugs (v2.0.3)**: Switch button doesn't stop the running job before opening
-  picker; stopped highlight has a 1–2s delay; old stopped highlight lingers briefly
-  when stopping a second job. Details in `HANDOFF.md`.
-- Renamed to CM Timer. Brand color red. Idle screen shows "CM Timer" title.
-- Log Time: one button (no menu). Posts session delta, session count, lifetime total, note, date.
+- **v2.1.0** UI redesign: compact content-sized views, 48px JetBrains Mono hero timer,
+  integrated transparent titlebar with pulsing green status dot, job-number chips
+  (red/pink) on running view + idle recents + pill, branded idle screen (red tile +
+  "CM Timer" wordmark, left-aligned), full-width red "Start a job" CTA with play icon,
+  redesigned pill (rounded capsule with job number + time). Window auto-sizes per view
+  (idle 300px, running 248px, picker 480px). New dark/light color token system.
+  Design reference: `Monday timer widget design/design_handoff_ui_redesign/`.
+- **Known bugs (v2.0.3, not yet fixed)**: Switch button doesn't stop the running job
+  before opening picker; stopped highlight has a 1–2s delay; old stopped highlight
+  lingers briefly when stopping a second job. Details in `HANDOFF.md`.
+- CM Timer brand. Log Time: one button (no menu). Posts session delta, session count,
+  lifetime total, note, date.
 - Comment format: note (if any), `Session (N): Xh Ym`, `Total: Xh Ym`, `MM/DD/YYYY`.
-- X button quits the app. Minimize collapses to pill. All full views share one size.
+- X button quits the app. Minimize collapses to pill.
 - Resize grip uses absolute-delta + `setBounds()` (no feedback loop).
 - Installer delivered via GitHub Releases at `vioverse-io/monday-timer-widget`.
 
@@ -65,10 +69,11 @@ times out, run `wineboot --init` once first, then rebuild. Unsigned → SmartScr
 - Frameless window: interactive elements must be `-webkit-app-region: no-drag` (and SVGs
   inside buttons need `pointer-events:none`) or clicks get swallowed. The pill and resize
   grip use JS pointer-drag, not app-region.
-- Window is `resizable:true` so programmatic sizing works both directions. All full views
-  share one persisted size (`fullViewSize`). Resize grip uses `setBounds()` atomically
-  (absolute deltas from drag start) to avoid the feedback loop from incremental
-  `setContentSize` + `setPosition`. X button quits; minimize collapses to pill.
+- Window is `resizable:true` so programmatic sizing works both directions. Each view
+  auto-sizes to its content height via `VIEW_SIZES` in `main.js`. Resize grip uses
+  `setBounds()` atomically (absolute deltas from drag start) to avoid the feedback loop
+  from incremental `setContentSize` + `setPosition`. X button quits; minimize collapses
+  to pill.
 - API token encrypted via `safeStorage` (tied to Windows user account, survives reinstalls
   on the same machine). Logs in `userData/logs` (weekly rotation).
 - Job picker pulls all groups from the board API; filter pills are built dynamically with
