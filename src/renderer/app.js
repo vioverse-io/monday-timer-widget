@@ -85,6 +85,12 @@
       $('job-name').textContent = name || '—';
     }
     $('job-name').title = name || '';
+    // Update pill job number
+    const pillNum = $('pill-number');
+    if (pillNum) {
+      pillNum.textContent = n || '';
+      pillNum.classList.toggle('hidden', !n);
+    }
   }
   function shortName(name) {
     if (!name) return 'this job';
@@ -152,8 +158,8 @@
     // Total = unexported delta (not lifetime)
     const total = (state.totalMsBase || 0) + elapsed;
     $('elapsed').textContent = fmtClock(elapsed);
-    $('today').textContent = 'Today ' + fmtToday(today);
-    $('total').textContent = 'Total ' + fmtToday(total);
+    $('today').innerHTML = 'Today <strong>' + fmtToday(today) + '</strong>';
+    $('total').innerHTML = 'Total <strong>' + fmtToday(total) + '</strong>';
     $('pill-time').textContent = fmtPill(elapsed);
   }
 
@@ -194,13 +200,17 @@
     for (const j of recents) {
       const row = document.createElement('div');
       row.className = 'idle-recent-row';
-      const dot = document.createElement('span');
-      dot.className = 'idle-recent-dot';
+      const n = jobNum(j.name);
+      if (n) {
+        const chip = document.createElement('span');
+        chip.className = 'idle-chip idle-chip-red';
+        chip.textContent = n;
+        row.appendChild(chip);
+      }
       const lbl = document.createElement('span');
-      lbl.textContent = j.name;
+      lbl.textContent = n ? cleanName(j.name) : j.name;
       lbl.style.overflow = 'hidden';
       lbl.style.textOverflow = 'ellipsis';
-      row.appendChild(dot);
       row.appendChild(lbl);
       row.addEventListener('click', () => pickJob(j));
       wrap.appendChild(row);

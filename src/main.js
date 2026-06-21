@@ -16,7 +16,12 @@ const safetyNets = require('./safety-nets');
 const isDev = process.argv.includes('--dev');
 
 const PILL_SIZE = { w: 120, h: 40 };
-const DEFAULT_FULL_SIZE = { w: 340, h: 260 };
+const DEFAULT_FULL_SIZE = { w: 340, h: 300 };
+const VIEW_SIZES = {
+  idle:    { w: 340, h: 300 },
+  running: { w: 340, h: 248 },
+  picker:  { w: 340, h: 480 },
+};
 
 let mainWindow = null;
 let settingsWindow = null;
@@ -91,7 +96,7 @@ function effectiveTheme() {
   return t;
 }
 function themeBg(theme) {
-  return theme === 'light' ? '#FFFFFF' : '#1F2A40';
+  return theme === 'light' ? '#FFFFFF' : '#1E2740';
 }
 function applyThemeToWindows() {
   const bg = themeBg(effectiveTheme());
@@ -208,26 +213,19 @@ function createMainWindow() {
 
 function resizeForView(view) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const wasPill = currentView === 'pill';
-  const isPill = view === 'pill';
   currentView = view;
   if (view !== 'pill') lastFullView = view;
 
-  if (isPill) {
-    // Shrink to pill
-    const [x, y] = mainWindow.getPosition();
+  const [x, y] = mainWindow.getPosition();
+  if (view === 'pill') {
     mainWindow.setContentSize(PILL_SIZE.w, PILL_SIZE.h);
-    const [x2, y2] = mainWindow.getPosition();
-    if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
-  } else if (wasPill) {
-    // Expand from pill — restore saved full-view size
-    const size = fullViewSize();
-    const [x, y] = mainWindow.getPosition();
+  } else {
+    const size = VIEW_SIZES[view] || VIEW_SIZES.idle;
     mainWindow.setContentSize(size.w, size.h);
-    const [x2, y2] = mainWindow.getPosition();
-    if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
   }
-  // Full → full: no resize — size stays consistent
+  // Restore position if setContentSize shifted it
+  const [x2, y2] = mainWindow.getPosition();
+  if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
 }
 
 function showWidget() {

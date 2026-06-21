@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src https://fonts.gstatic.com" />
   <title>CM Timer</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -37,18 +37,28 @@
 
       <!-- Idle -->
       <div id="view-idle" class="view view-idle">
-        <div class="idle-title">CM Timer</div>
+        <div class="idle-brand">
+          <div class="idle-brand-tile">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><polyline points="8 4.5 8 8 10.5 9.5"/></svg>
+          </div>
+          <span class="idle-brand-name">CM Timer</span>
+        </div>
         <div id="idle-recents-wrap" class="idle-recents-wrap">
           <div id="idle-recents-label" class="section-label hidden">RECENT</div>
           <div id="idle-recents" class="idle-recents"></div>
         </div>
-        <button id="start-job-btn" class="btn btn-primary">Start a job</button>
+        <button id="start-job-btn" class="btn btn-primary">
+          <svg viewBox="0 0 16 16" width="12" height="12"><polygon points="4 2 14 8 4 14" fill="currentColor"/></svg>
+          Start a job
+        </button>
       </div>
 
       <!-- Running -->
       <div id="view-running" class="view hidden">
-        <div id="job-number" class="job-number">—</div>
-        <div id="job-name" class="job-name">—</div>
+        <div class="job-line">
+          <span id="job-number" class="job-number">—</span>
+          <span id="job-name" class="job-name">—</span>
+        </div>
         <div class="time-row">
           <span id="elapsed" class="elapsed">0:00</span>
         </div>
@@ -101,6 +111,7 @@
     <!-- Collapsed pill (click to expand, drag to move) -->
     <div id="view-pill" class="pill hidden">
       <span id="pill-dot" class="dot dot-gray"></span>
+      <span id="pill-number" class="pill-number"></span>
       <span id="pill-time" class="pill-time">0m</span>
     </div>
 

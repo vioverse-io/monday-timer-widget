@@ -1,16 +1,29 @@
+/* ================================================================
+   CM Timer — Redesigned UI tokens + components (v2.1 visual pass)
+   ================================================================ */
+
 :root {
-  --bg-primary: #1F2A40;
-  --bg-secondary: #2A3548;
-  --bg-tertiary: #18223A;
-  --border: #2F3A52;
-  --border-strong: #3D4861;
-  --text-primary: #E6E9F0;
-  --text-secondary: #8B92A8;
-  --text-tertiary: #5A6378;
-  --accent-green: #00C875;
-  --accent-red: #E2445C;
-  --accent-blue: #0073EA;
+  --bg-primary:    #1E2740;
+  --bg-secondary:  #28324C;
+  --bg-tertiary:   #313B5C;
+  --border:        #2D3759;
+  --border-strong: #38436A;
+  --hairline:      #2A3350;
+  --text-primary:  #F1F3F8;
+  --text-body:     #E4E8F0;
+  --text-secondary:#9AA0B4;
+  --text-tertiary: #7E869E;
+  --chip-bg:       rgba(224,68,92,.18);
+  --chip-fg:       #FF7488;
+  --ctrl-icon:     #6B7390;
+  --accent-red:    #E2445C;
+  --accent-green:  #00C875;
+  --accent-blue:   #0073EA;
   --accent-yellow: #FDAB3D;
+  --idle-dot:      #48506B;
+  --distract-bg:   transparent;
+  --neutral-chip-bg: #313B5C;
+  --neutral-chip-fg: #9AA0B4;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,7 +48,6 @@ html, body {
 }
 
 /* ---- Demo banner ---- */
-/* Demo-mode footer label (replaces the old amber top banner) */
 .demo-footer {
   text-align: center;
   font-size: 10px;
@@ -48,28 +60,29 @@ html, body {
   pointer-events: none;
 }
 
-/* ---- Top bar ---- */
+/* ---- Top bar (integrated, transparent) ---- */
 .topbar {
-  height: 28px;
-  min-height: 28px;
+  height: 34px;
+  min-height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
-  background: var(--bg-tertiary);
+  padding: 0 11px;
+  background: transparent;
+  border-bottom: 1px solid var(--hairline);
   -webkit-app-region: drag;
 }
 .topbar-left { display: flex; align-items: center; gap: 6px; }
 .topbar-right { display: flex; align-items: center; gap: 2px; }
 .topbar-label {
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-secondary);
+  letter-spacing: 0.8px;
+  color: var(--text-tertiary);
 }
-/* Anything interactive must be no-drag, including its children — otherwise a click
-   landing on a child (e.g. the <svg> inside a button) is swallowed by the drag region.
-   pointer-events:none on icon SVGs makes the button itself the click target. */
+
+/* Drag-region safety: interactive elements and their children must opt out */
 .no-drag, .no-drag * { -webkit-app-region: no-drag; }
 .icon-btn, .icon-btn *, .btn, .btn * { -webkit-app-region: no-drag; }
 .icon-btn svg, .btn svg, .seg svg, .job-row-play svg, .resize-grip svg {
@@ -80,104 +93,168 @@ html, body {
   -webkit-app-region: no-drag;
   background: none;
   border: none;
-  color: var(--text-secondary);
-  width: 22px;
-  height: 22px;
+  color: var(--ctrl-icon);
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
 }
-.icon-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
+.icon-btn:hover { color: var(--text-secondary); background: var(--bg-secondary); }
 
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.dot-green { background: var(--accent-green); }
-.dot-gray { background: var(--text-tertiary); }
-.dot-red { background: var(--accent-red); }
+/* Status dots */
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot-green { background: var(--accent-green); animation: cmpulse 2.4s infinite; }
+.dot-gray  { background: var(--idle-dot); }
+.dot-red   { background: var(--accent-red); }
+
+@keyframes cmpulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0,200,117,.42); }
+  70%  { box-shadow: 0 0 0 6px rgba(0,200,117,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,200,117,0); }
+}
 
 /* ---- Body ---- */
-.body { flex: 1; padding: 12px 14px; overflow: hidden; }
+.body { flex: 1; padding: 14px 16px 16px; overflow: hidden; }
 .view { height: 100%; }
 .hidden { display: none !important; }
 
-/* ---- Idle ---- */
+/* ---- Idle view ---- */
 .view-idle {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  height: 100%;
+  padding: 4px 0 0;
+}
+
+/* Brand mark + wordmark */
+.idle-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.idle-brand-tile {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--accent-red);
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  height: 100%;
+  flex-shrink: 0;
 }
-.idle-msg { font-size: 14px; color: var(--text-secondary); }
-.idle-recents-wrap { width: 100%; }
+.idle-brand-tile svg { color: #fff; }
+.idle-brand-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* Old idle-title hidden (replaced by idle-brand) */
+.idle-title { display: none; }
+
+.idle-recents-wrap { width: 100%; flex: 1; }
 .idle-recents { width: 100%; }
+
+/* RECENT label in idle (distinct from picker section-label) */
+#idle-recents-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
 .idle-recent-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 7px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.idle-recent-row:first-child,
 .idle-recent-row:hover { background: var(--bg-secondary); }
-.idle-recent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-tertiary);
+
+/* Job-number chip in idle recents */
+.idle-chip {
+  display: inline-flex;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
   flex-shrink: 0;
 }
+.idle-chip-red     { background: var(--chip-bg); color: var(--chip-fg); }
+.idle-chip-neutral { background: var(--neutral-chip-bg); color: var(--neutral-chip-fg); }
 
-/* ---- Running ---- */
-/* Job number: the focal point — large, green (matches the TRACKING dot). */
-.job-number {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: 0.3px;
-  color: var(--accent-green);
+/* Old dot in idle recents (replaced by chips) */
+.idle-recent-dot { display: none; }
+
+/* ---- Running view ---- */
+.job-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
-/* Description: number stripped out. Heavier + brighter so the project reads clearly. */
+.job-number {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  flex-shrink: 0;
+}
 .job-name {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--text-primary);
-  margin-top: 2px;
+  color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .time-row {
-  margin-top: 10px;
-  display: flex;
-  align-items: baseline;
+  margin-top: 13px;
 }
 .elapsed {
-  font-size: 26px;
-  font-weight: 300;
-  font-family: "SF Mono", "Cascadia Mono", "Consolas", monospace;
+  font-size: 48px;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   color: var(--text-primary);
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  line-height: 1;
 }
-.totals { margin-top: 4px; font-size: 11px; color: var(--text-secondary); }
+.totals {
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.totals strong { color: var(--text-secondary); font-weight: 600; }
 .totals-sep { color: var(--text-tertiary); }
-.btn-row { display: flex; gap: 8px; margin-top: 12px; }
+.btn-row { display: flex; gap: 9px; margin-top: 16px; }
 
-/* ---- Buttons (lighter: slim height, regular weight, thin borders) ---- */
+/* ---- Buttons ---- */
 .btn {
-  font-size: 12px;
-  font-weight: 450;
+  font-size: 13px;
+  font-weight: 600;
   font-family: inherit;
-  border-radius: 6px;
+  border-radius: 9px;
   padding: 6px 10px;
-  min-height: 30px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -185,21 +262,78 @@ html, body {
   gap: 6px;
   border: 1px solid transparent;
 }
-.btn-primary { background: var(--accent-red); color: #fff; border: none; border-radius: 20px; padding: 8px 20px; }
+.btn-primary {
+  width: 100%;
+  height: 40px;
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(224,68,92,.30);
+}
 .btn-primary:hover { filter: brightness(1.08); }
-.btn-stop { flex: 1; background: var(--accent-red); color: #fff; border: none; }
+.btn-stop {
+  flex: 1;
+  height: 38px;
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
 .btn-stop:hover { filter: brightness(1.08); }
 .btn-switch {
   flex: 1;
-  background: transparent;
-  color: var(--text-primary);
+  height: 38px;
+  background: var(--bg-secondary);
+  color: var(--text-body);
   border: 1px solid var(--border-strong);
+  border-radius: 9px;
 }
-.btn-switch:hover { background: var(--bg-secondary); }
-.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-switch:hover { background: var(--bg-tertiary); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
 .btn-ghost:hover { color: var(--text-primary); }
 
-/* ---- Picker ---- */
+/* ---- Distraction recovery ---- */
+.distract-row { margin-top: 9px; }
+.btn-distract {
+  flex: 1;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--distract-bg);
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 500;
+  min-height: auto;
+  padding: 0 8px;
+}
+.distract-flash {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  color: var(--accent-red);
+  pointer-events: none;
+  animation: flash-fade 1s ease-out forwards;
+}
+@keyframes flash-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+.elapsed-flash { color: var(--accent-red) !important; transition: color 0.15s; }
+
+/* ---- Picker view ---- */
 .filter-row {
   display: flex;
   align-items: center;
@@ -213,16 +347,16 @@ html, body {
 .filter-pill {
   flex-shrink: 0;
   background: var(--bg-tertiary);
-  border: 1px solid var(--border);
+  border: none;
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11.5px;
+  font-weight: 600;
   font-family: inherit;
   padding: 5px 12px;
-  border-radius: 14px;
+  border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .filter-pill:hover { background: var(--bg-secondary); color: var(--text-primary); }
 /* Active pill gets its group color (set via inline style in JS) */
@@ -231,21 +365,21 @@ html, body {
 .search-wrap { position: relative; margin-bottom: 8px; }
 .search-icon {
   position: absolute;
-  left: 8px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-tertiary);
 }
 .search {
   width: 100%;
-  height: 34px;
-  background: var(--bg-tertiary);
+  height: 36px;
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 9px;
   color: var(--text-primary);
   font-size: 13px;
   font-family: inherit;
-  padding: 0 10px 0 28px;
+  padding: 0 10px 0 30px;
   outline: none;
 }
 .search::placeholder { color: var(--text-tertiary); }
@@ -274,8 +408,8 @@ textarea.search {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 9px 6px;
+  border-bottom: 1px solid var(--hairline);
   cursor: pointer;
   transition: background 0.12s;
 }
@@ -291,14 +425,14 @@ textarea.search {
   text-overflow: ellipsis;
 }
 .job-row-num { font-weight: 700; }
-.job-row-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.job-row-sub { font-size: 10.5px; color: var(--text-tertiary); margin-top: 2px; }
 .job-row-play-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: 7px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.15s;
@@ -320,19 +454,69 @@ textarea.search {
 }
 .picker-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 16px; }
 
-/* ---- Collapsed pill ---- */
-.app.is-pill { background: var(--bg-primary); }
-/* The pill is NOT a drag region: a drag region swallows clicks in Electron, which
-   would make it impossible to click the pill to expand. Dragging-to-move and
-   click-to-expand are handled in app.js via pointer events instead. */
-.pill {
-  height: 100vh;
+/* ---- Filter row with refresh ---- */
+.filter-row-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.filter-row-wrap .filter-row { flex: 1; margin-bottom: 0; }
+.refresh-btn { flex-shrink: 0; }
+.refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ---- Log Time button on job rows ---- */
+.job-row-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+  -webkit-app-region: no-drag;
+  padding: 0;
+  opacity: 0;
+}
+.job-row:hover .job-row-export { opacity: 1; }
+.job-row.active .job-row-export { opacity: 1; }
+.job-row-export svg { pointer-events: none; }
+.job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+/* ---- Collapsed pill ---- */
+.app.is-pill { background: transparent; }
+.pill {
+  height: 100vh;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.5);
+  padding: 9px 16px 9px 14px;
   -webkit-app-region: no-drag;
   cursor: pointer;
+}
+.pill-number {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--chip-fg);
+}
+.pill-time {
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  color: var(--text-primary);
 }
 
 /* Bottom-right resize grip */
@@ -352,11 +536,6 @@ textarea.search {
   z-index: 30;
 }
 .resize-grip:hover { color: var(--text-secondary); }
-.pill-time {
-  font-size: 15px;
-  font-family: "SF Mono", "Cascadia Mono", "Consolas", monospace;
-  color: var(--text-primary);
-}
 
 /* ---- Toast ---- */
 .toast {
@@ -366,7 +545,7 @@ textarea.search {
   bottom: 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px 10px;
   display: flex;
   align-items: center;
@@ -392,7 +571,7 @@ textarea.search {
   bottom: 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--accent-yellow);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
 }
 .alert-msg { font-size: 11px; color: var(--text-primary); margin-bottom: 8px; }
@@ -426,7 +605,7 @@ textarea.search {
 .modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: 13px;
   padding: 16px;
   width: 100%;
   display: flex;
@@ -437,82 +616,27 @@ textarea.search {
 .modal-msg { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.4; }
 .modal-btn { width: 100%; }
 
-/* ---- Distraction recovery ---- */
-.distract-row { margin-top: 4px; }
-.btn-distract {
-  flex: 1;
-  font-size: 11px;
-  padding: 4px 8px;
-  min-height: 24px;
-  color: var(--text-secondary);
-}
-.distract-flash {
-  position: absolute;
-  top: 68px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: "SF Mono", "Cascadia Mono", "Consolas", monospace;
-  color: var(--accent-red);
-  pointer-events: none;
-  animation: flash-fade 1s ease-out forwards;
-}
-@keyframes flash-fade {
-  0% { opacity: 1; }
-  100% { opacity: 0; }
-}
-.elapsed-flash { color: var(--accent-red) !important; transition: color 0.15s; }
-
-/* ---- Filter row with refresh ---- */
-.filter-row-wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.filter-row-wrap .filter-row { flex: 1; margin-bottom: 0; }
-.refresh-btn { flex-shrink: 0; }
-.refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* ---- Log Time button on job rows ---- */
-.job-row-export {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  flex-shrink: 0;
-  background: none;
-  border: 1px solid var(--border-strong);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
-  -webkit-app-region: no-drag;
-  padding: 0;
-  opacity: 0;
-}
-.job-row:hover .job-row-export { opacity: 1; }
-.job-row.active .job-row-export { opacity: 1; }
-.job-row-export svg { pointer-events: none; }
-.job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
-
-/* ---- Light theme (Monday-like): overrides the dark defaults ---- */
+/* ---- Light theme ---- */
 :root[data-theme="light"] {
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F6F8;
-  --bg-tertiary: #EDF0F4;
-  --border: #E1E4EA;
-  --border-strong: #CED2DA;
-  --text-primary: #1F2A40;
-  --text-secondary: #676879;
-  --text-tertiary: #9699A6;
-  /* accent colors stay the same in both themes */
+  --bg-primary:    #FFFFFF;
+  --bg-secondary:  #F5F6F8;
+  --bg-tertiary:   #F2F3F6;
+  --border:        #E6E8EC;
+  --border-strong: #DEE1E7;
+  --hairline:      #F1F2F5;
+  --text-primary:  #1B2233;
+  --text-body:     #2A3142;
+  --text-secondary:#6B7280;
+  --text-tertiary: #9296A4;
+  --chip-bg:       #FCEAEE;
+  --chip-fg:       #E0445C;
+  --ctrl-icon:     #AEB2BE;
+  --accent-red:    #E0445C;
+  --accent-green:  #00C875;
+  --idle-dot:      #C4C8D2;
+  --distract-bg:   #FAFBFC;
+  --neutral-chip-bg: #F2F3F6;
+  --neutral-chip-fg: #7C8294;
 }
 :root[data-theme="light"] .modal-overlay { background: rgba(31, 42, 64, 0.45); }
 :root[data-theme="light"] .job-row.active { background: #F0F1F3; }
@@ -520,15 +644,5 @@ textarea.search {
 :root[data-theme="light"] .job-row.active .job-row-name { color: var(--text-primary); font-weight: 700; }
 :root[data-theme="light"] .job-row-export { border-color: #B0B5BF; color: #6B7280; }
 :root[data-theme="light"] .job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); }
-
-/* ---- Idle branding ---- */
-.idle-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--accent-red);
-  letter-spacing: 1.2px;
-  margin-bottom: 6px;
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--accent-red);
-  opacity: 0.9;
-}
+:root[data-theme="light"] .btn-switch { background: var(--bg-primary); }
+:root[data-theme="light"] .pill { box-shadow: 0 12px 36px rgba(22,30,52,.16); }
