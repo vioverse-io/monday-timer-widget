@@ -23,24 +23,31 @@ v3 planning: `v3-planning.md`.
 
 ## Non-negotiable design rule (local-clock model)
 Monday's API cannot write to the time-tracking column at all (mutations blank it).
-The widget **owns the clock**. Stop/switch accumulate time locally — no API call.
-Posting to Monday only happens via **Log Time** (single button, posts session + total)
-through the `create_update` mutation. Never try to write to the time-tracking column.
+The widget **owns the clock**. Stop/switch accumulate time locally and auto-write the
+all-time total to two "Time Spent" columns (Numbers + Text) via
+`change_simple_column_value`. Comments are posted only when the user types a note
+(via `create_update`). Never try to write to the time-tracking column.
 
 ## Status (keep this updated as work progresses)
-- **v2.1.0** UI redesign: compact content-sized views, 48px JetBrains Mono hero timer,
-  integrated transparent titlebar with pulsing green status dot, job-number chips
-  (red/pink) on running view + idle recents + pill, branded idle screen (red tile +
-  "CM Timer" wordmark, left-aligned), full-width red "Start a job" CTA with play icon,
-  redesigned pill (rounded capsule with job number + time). Window auto-sizes per view
-  (idle 300px, running 248px, picker 480px). New dark/light color token system.
-  Design reference: `Monday timer widget design/design_handoff_ui_redesign/`.
-- **Known bugs (v2.0.3, not yet fixed)**: Switch button doesn't stop the running job
-  before opening picker; stopped highlight has a 1–2s delay; old stopped highlight
-  lingers briefly when stopping a second job. Details in `HANDOFF.md`.
-- CM Timer brand. Log Time: one button (no menu). Posts session delta, session count,
-  lifetime total, note, date.
-- Comment format: note (if any), `Session (N): Xh Ym`, `Total: Xh Ym`, `MM/DD/YYYY`.
+- **v2.2.0** "Focus" UI redesign + Time Spent columns + UX fixes.
+  - **Theme**: warm charcoal (dark) / cream paper (light). Coral accent (`#EA5468`).
+    Abstract gauge mark replaces old clock-in-red-tile. 56px JetBrains Mono timer.
+    Elevated inner cards (`.run-card`), pill buttons (21px radius), progress scrubber
+    on running view. Design source: `production/` directory.
+  - **Window sizes**: idle 360px, running 324px, picker 480px (width 340 unchanged).
+    Window bg: dark `#1E1B17`, light `#F5F1EB`.
+  - **Time Spent columns**: on every stop/switch, auto-writes all-time total to two
+    Monday columns — Numbers (total minutes, e.g. `220`) and Text (`3h 40m 0s`).
+    Auto-detected on startup by type + title "Time Spent".
+  - **Comment to Monday**: renamed from "Log to Monday". Posts only the user's note
+    (no timing metadata in comments — columns have that). Comment only posts when
+    a note is entered.
+  - **Stop → Play**: stopped view shows Play button (restarts same job) + Switch.
+    No auto-dismiss; stays until user acts.
+  - **Paused indicator**: picker shows gray pill with white play icon + "Paused"
+    label on last-stopped job. Consistent on both stop and switch flows.
+  - **Status dots**: green (running, pulsing), gray (idle), red square (stopped).
+    Topbar label auto-colors from dot (`.dot-green + .topbar-label` etc.).
 - X button quits the app. Minimize collapses to pill.
 - Resize grip uses absolute-delta + `setBounds()` (no feedback loop).
 - Installer delivered via GitHub Releases at `vioverse-io/monday-timer-widget`.
@@ -80,8 +87,8 @@ times out, run `wineboot --init` once first, then rebuild. Unsigned → SmartScr
   each group's Monday color. No manual group configuration in settings.
 - Jobs sorted by due date (earliest first). Recents on idle screen use persisted history.
 - Time: **Today** = local-day-clipped unexported delta; **Total** = full unexported delta
-  (time since last Log Time). Timezone EST.
-- Monday's API cannot write to the time-tracking column. Do not attempt it. Exports are
-  posted as comments via `create_update` mutation. Other column types (Numbers, Text) can
-  be written via `change_column_value` — planned for v3 (see `v3-planning.md`).
+  (time since last Comment to Monday). Timezone EST.
+- Monday's API cannot write to the time-tracking column. Do not attempt it. Time is
+  written to "Time Spent" Numbers + Text columns via `change_simple_column_value` on
+  every stop. Comments posted via `create_update` only when user enters a note.
 - Commit only when the user asks.

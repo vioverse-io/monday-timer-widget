@@ -1,35 +1,28 @@
-# v3.0 Planning — Numbers Column + Session Log + Smart Comments
+# v3.0 Planning — Session Log (remaining)
 
-## 1. Numbers Column ("Logged Hours")
+## Shipped in v2.2.0
 
-A board admin adds a Numbers column to the Monday board. The app auto-detects it
-(same pattern as the existing time-tracking column detection).
+### Numbers Column ("Time Spent") ✓
+Auto-detected on startup (type `numbers`/`numeric`, title "Time Spent"). On every
+stop/switch, writes the job's all-time total as **total minutes** (e.g. `220`).
 
-On every export (Export All or Export and Clear), the app writes the job's cumulative
-lifetime total to that column via `change_column_value` mutation. The column is always
-current and visible on the board — managers see hours at a glance without opening
-comments.
+### Text Column ("Time Spent") ✓
+Auto-detected alongside the Numbers column (type `text`, title "Time Spent"). On every
+stop/switch, writes the formatted total as **"Xh Xm Xs"** (e.g. `3h 40m 0s`).
 
-**Requires:** Someone with board admin rights to add the column on production boards.
+Both columns update automatically via `updateTimeSpent()` in `monday-api.js`, called
+from `accumulateSession()` in `main.js`. Fire-and-forget (errors logged, don't block).
 
-**API:** `change_column_value` on a Numbers column is the simplest Monday mutation.
-No rate limit concerns at this volume. No special formatting — just the number.
+### Smart Comments ✓
+v2 posted a comment on every export. v2.2.0 behavior:
+- "Comment to Monday" button posts **only the user's note** (no timing metadata).
+- No comment is posted if the note field is empty. Fallback: if neither Time Spent
+  column was detected, a comment is always posted so nothing is silently dropped.
 
-## 2. Smart Comments (notes drive comments)
+## Still planned
 
-Current v2 behavior: every export posts a Monday comment.
-
-v3 behavior:
-- Export **with a note** → posts a Monday comment containing the note and session
-  duration. Column also updates.
-- Export **without a note** → column update only. No comment posted.
-
-This eliminates comment clutter. Comments become meaningful (they have context about
-what was done). The column carries the total.
-
-## 3. Session Log
-
-Every start/stop event is recorded locally per job:
+### Session Log
+Every start/stop event recorded locally per job:
 
 ```
 Job 111122 — Session Log:
@@ -45,8 +38,8 @@ persists locally via electron-store.
 UI: A "Session Log" or "Details" button per job in the picker or running view. Opens a
 scrollable list.
 
-On export with a note, the comment could include the full session breakdown since last
-export:
+On Comment to Monday with a note, the comment could include the session breakdown since
+last export:
 
 ```
 Logged 4h (3 sessions)
@@ -57,5 +50,5 @@ Logged 4h (3 sessions)
 
 ## Status
 
-Not started. Planned after v2.0 is stable. Numbers column + smart comments are low
-complexity (~30 min). Session log needs a new UI view — moderate complexity.
+Numbers column + text column + smart comments: **shipped in v2.2.0**.
+Session log: not started. Moderate complexity (new UI view).
