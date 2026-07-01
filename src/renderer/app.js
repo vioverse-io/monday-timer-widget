@@ -301,22 +301,22 @@
     if (isStopped) {
       const badge = document.createElement('span');
       badge.className = 'job-row-stopped-badge';
-      badge.textContent = 'Stopped';
+      badge.textContent = 'Paused';
       sub.prepend(badge);
     }
 
     const play = document.createElement('span');
     play.className = 'job-row-play-pill';
-    play.style.background = isStopped ? '#B8860B' : color;
-    play.style.color = isStopped ? '#333' : isLightColor(color) ? '#333' : '#fff';
+    play.style.background = isStopped ? 'var(--text-tertiary)' : color;
+    play.style.color = isStopped ? '#fff' : isLightColor(color) ? '#333' : '#fff';
     play.innerHTML = isStopped
-      ? '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg>'
+      ? '<svg viewBox="0 0 16 16" width="12" height="12"><polygon points="5 2 14 8 5 14" fill="currentColor"/></svg>'
       : '<svg viewBox="0 0 24 24" width="12" height="12"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/></svg>';
 
     // Log Time button (clock icon)
     const exp = document.createElement('button');
     exp.className = 'job-row-export';
-    exp.title = 'Log time';
+    exp.title = 'Comment to Monday';
     exp.innerHTML =
       '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
     exp.addEventListener('click', (e) => {
@@ -423,17 +423,8 @@
 
   // ---- log time ----
   async function doLogTime(itemId) {
-    const info = await api.getExportInfo(itemId);
-    if (info.deltaMs <= 0) {
-      showToast({ text: 'No time to log on this job.', durationMs: 4000 });
-      return;
-    }
-    const sessionStr = fmtToday(info.deltaMs);
-    const totalStr = fmtToday(info.totalMs);
-    const sc = info.sessionCount || 1;
-    const totalMin = Math.round(info.totalMs / 60000);
     $('confirm-export-msg').textContent =
-      `Log ${sessionStr} (${sc} session${sc !== 1 ? 's' : ''}). Time Spent → ${totalMin} min all-time.`;
+      `Post a comment on this job to Monday.`;
     const noteInput = $('confirm-export-note');
     noteInput.value = '';
     $('confirm-export').classList.remove('hidden');
@@ -452,9 +443,9 @@
       cleanup();
       const result = await api.logTime(itemId, note);
       if (result.ok) {
-        showToast({ text: 'Time logged to Monday', durationMs: 4000 });
+        showToast({ text: 'Comment posted to Monday', durationMs: 4000 });
       } else {
-        showToast({ text: 'Log failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
+        showToast({ text: 'Comment failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
       }
     };
     const onKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doConfirm(); } };
@@ -496,9 +487,9 @@
     $('topbar-label').textContent = 'STOPPED';
     setDot(false);
     $('status-dot').className = 'dot dot-red';
-    // Change Stop to Done
+    // Change Stop to Play (restart same job)
     $('stop-btn').innerHTML =
-      '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Done';
+      '<svg viewBox="0 0 16 16" width="11" height="11"><polygon points="4 2 14 8 4 14" fill="currentColor"/></svg> Play';
     clearTimeout(stoppedTimer);
   }
 
@@ -648,13 +639,24 @@
 
     $('start-job-btn').addEventListener('click', () => openPicker('start'));
     $('switch-btn').addEventListener('click', () => {
-      if (stoppedSession) dismissStoppedSummary();
+      // Track the current/stopped job so it shows as "stopped" in the picker
+      if (stoppedSession) {
+        lastStoppedItemId = stoppedSession.itemId;
+        dismissStoppedSummary();
+      } else if (state.running) {
+        lastStoppedItemId = state.itemId;
+      }
       openPicker('switch');
     });
     $('stop-btn').addEventListener('click', async () => {
       if (stoppedSession) {
-        // "Done" button during post-stop summary
+        // "Play" button during post-stop summary — restart same job
+        const job = { itemId: stoppedSession.itemId, itemName: stoppedSession.itemName };
         dismissStoppedSummary();
+        const s = await api.startJob({ itemId: job.itemId, itemName: job.itemName });
+        applyAfterAction(s);
+        lastStoppedItemId = null;
+        setView('running');
         return;
       }
       // Capture session info before stopping
@@ -680,7 +682,7 @@
       else subtractTime(15 * 60 * 1000, '-15:00');
     });
 
-    // Log to Monday — surfaces the existing per-job log flow from the running/stopped view.
+    // Comment to Monday — posts a comment on the job.
     $('log-btn').addEventListener('click', () => {
       const id = stoppedSession ? stoppedSession.itemId : state.itemId;
       if (id) doLogTime(id);
