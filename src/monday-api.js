@@ -22,6 +22,8 @@ let isDemoMode = false;
 let token = null;
 let boardId = '7833051194';
 let timeTrackingColumnId = null; // confirmed in Step 0; null until then
+let timeSpentColumnId = null;    // Numbers "Time Spent" column; null until detected
+let timeSpentTextColumnId = null; // Text "Time Spent" column; null until detected
 
 function setDemoMode(enabled) {
   isDemoMode = !!enabled;
@@ -29,10 +31,12 @@ function setDemoMode(enabled) {
 function getDemoMode() {
   return isDemoMode;
 }
-function setCredentials({ token: t, boardId: b, timeTrackingColumnId: tc } = {}) {
+function setCredentials({ token: t, boardId: b, timeTrackingColumnId: tc, timeSpentColumnId: ts, timeSpentTextColumnId: tst } = {}) {
   if (t !== undefined) token = t;
   if (b !== undefined) boardId = b;
   if (tc !== undefined) timeTrackingColumnId = tc;
+  if (ts !== undefined) timeSpentColumnId = ts;
+  if (tst !== undefined) timeSpentTextColumnId = tst;
 }
 
 // ---- Low-level GraphQL helper (real mode only) ----
@@ -241,33 +245,69 @@ async function logSession(itemId, startedAt, endedAt) {
  * @param {number} exportId    sequential export number (e.g. 1, 2, 3)
  * @param {string} [note]      optional one-line note (omitted from comment if empty)
  */
+/**
+ * On Log-to-Monday:
+ *   1) Update both Time Spent columns with the all-time total.
+ *   2) Post a comment ONLY when a note was entered (or as fallback if columns
+ *      weren't detected, so a logged session is never silently dropped).
+ *      Comment = just the note text, no timing info (columns have that).
+ */
 async function logExport(itemId, sessionMs, totalMs, sessionCount, note) {
   if (isDemoMode) {
     return { ok: true };
   }
-  function fmtDur(ms) {
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m ${s}s`;
-  }
-  const now = new Date();
-  const fmtDate = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`;
-  const lines = [];
+
+  // 1) Update both Time Spent columns with the all-time total.
+  await updateTimeSpent(itemId, totalMs);
+
+  // 2) Comment — just the note, no timing metadata.
   const trimmed = (note || '').trim();
-  if (trimmed) lines.push(trimmed);
-  lines.push(`Session (${sessionCount || 1}): ${fmtDur(sessionMs)}`);
-  lines.push(`Total: ${fmtDur(totalMs)}`);
-  lines.push(fmtDate);
-  const body = lines.join('\n');
-  await gql(
-    `mutation ($i: ID!, $body: String!) {
-       create_update(item_id: $i, body: $body) { id }
-     }`,
-    { i: itemId, body }
-  );
+  if (trimmed || !timeSpentColumnId) {
+    await gql(
+      `mutation ($i: ID!, $body: String!) {
+         create_update(item_id: $i, body: $body) { id }
+       }`,
+      { i: itemId, body: trimmed }
+    );
+  }
+
   return { ok: true };
+}
+
+/**
+ * Write the job's all-time total to both Time Spent columns (called on every stop).
+ *   Numbers column: decimal hours (e.g. "3.67")
+ *   Text column: formatted (e.g. "7h 10m 0s")
+ * Fire-and-forget — errors are logged but don't block the stop.
+ */
+async function updateTimeSpent(itemId, totalMs) {
+  if (isDemoMode) return;
+  const ms = Math.max(0, totalMs);
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+
+  // Numbers column — total minutes
+  if (timeSpentColumnId) {
+    const minutes = Math.round(ms / 60000);
+    await gql(
+      `mutation ($b: ID!, $i: ID!, $c: String!, $val: String!) {
+         change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
+       }`,
+      { b: boardId, i: itemId, c: timeSpentColumnId, val: String(minutes) }
+    );
+  }
+
+  // Text column — "7h 10m 0s"
+  if (timeSpentTextColumnId) {
+    const formatted = `${h}h ${m}m ${s}s`;
+    await gql(
+      `mutation ($b: ID!, $i: ID!, $c: String!, $val: String!) {
+         change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
+       }`,
+      { b: boardId, i: itemId, c: timeSpentTextColumnId, val: formatted }
+    );
+  }
 }
 
 /** Validate a token + board. Returns { ok, user?, groups?, error? }. */
@@ -304,6 +344,7 @@ module.exports = {
   getItems,
   logSession,
   logExport,
+  updateTimeSpent,
   testConnection,
   API_VERSION
 };

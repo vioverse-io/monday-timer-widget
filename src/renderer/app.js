@@ -431,8 +431,9 @@
     const sessionStr = fmtToday(info.deltaMs);
     const totalStr = fmtToday(info.totalMs);
     const sc = info.sessionCount || 1;
+    const totalMin = Math.round(info.totalMs / 60000);
     $('confirm-export-msg').textContent =
-      `Log ${sessionStr} (${sc} session${sc !== 1 ? 's' : ''}) to Monday? Total: ${totalStr}`;
+      `Log ${sessionStr} (${sc} session${sc !== 1 ? 's' : ''}). Time Spent → ${totalMin} min all-time.`;
     const noteInput = $('confirm-export-note');
     noteInput.value = '';
     $('confirm-export').classList.remove('hidden');
@@ -499,7 +500,6 @@
     $('stop-btn').innerHTML =
       '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Done';
     clearTimeout(stoppedTimer);
-    stoppedTimer = setTimeout(dismissStoppedSummary, 10000);
   }
 
   function dismissStoppedSummary() {
@@ -529,9 +529,6 @@
     flash.offsetHeight;
     flash.style.animation = '';
     setTimeout(() => flash.classList.add('hidden'), 1000);
-    // Reset auto-dismiss timer
-    clearTimeout(stoppedTimer);
-    stoppedTimer = setTimeout(dismissStoppedSummary, 10000);
   }
 
   // ---- refresh jobs ----

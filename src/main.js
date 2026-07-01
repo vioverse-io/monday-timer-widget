@@ -80,7 +80,9 @@ function refreshMode() {
     api.setCredentials({
       token: settings.getToken(),
       boardId: settings.get('boardId'),
-      timeTrackingColumnId: settings.get('timeTrackingColumnId') || null
+      timeTrackingColumnId: settings.get('timeTrackingColumnId') || null,
+      timeSpentColumnId: settings.get('timeSpentColumnId') || null,
+      timeSpentTextColumnId: settings.get('timeSpentTextColumnId') || null
     });
   }
   bannerVisible = demoMode; // banner returns every launch while in demo mode
@@ -402,6 +404,11 @@ function accumulateSession(session) {
     jt.todayMs = session.durationMs;
   }
   settings.setJobTimer(session.itemId, jt);
+  // Auto-write to Monday "Time Spent" columns (fire-and-forget).
+  if (!demoMode) {
+    api.updateTimeSpent(session.itemId, jt.totalMs)
+      .catch((err) => log('updateTimeSpent failed: ' + err.message));
+  }
 }
 
 function startJob(jobInput) {
@@ -848,6 +855,26 @@ if (!gotLock) {
           settings.set('timeTrackingColumnId', ttCol.id);
           api.setCredentials({ timeTrackingColumnId: ttCol.id });
           log(`auto-detected time-tracking column: ${ttCol.id} ("${ttCol.title}")`);
+        }
+        // "Time Spent" NUMBERS column (ignore the text "Times" column beside it).
+        const tsCol = cols.find((c) =>
+          (c.type === 'numbers' || c.type === 'numeric') && /^\s*time\s*spent\s*$/i.test(c.title)
+        );
+        if (tsCol) {
+          settings.set('timeSpentColumnId', tsCol.id);
+          api.setCredentials({ timeSpentColumnId: tsCol.id });
+          log(`auto-detected Time Spent numbers column: ${tsCol.id} ("${tsCol.title}")`);
+        } else {
+          log('Time Spent numbers column not found — will post comments as fallback');
+        }
+        // "Time Spent" TEXT column (formatted display, e.g. "7h 10m 0s").
+        const tstCol = cols.find((c) =>
+          c.type === 'text' && /^\s*time\s*spent\s*$/i.test(c.title)
+        );
+        if (tstCol) {
+          settings.set('timeSpentTextColumnId', tstCol.id);
+          api.setCredentials({ timeSpentTextColumnId: tstCol.id });
+          log(`auto-detected Time Spent text column: ${tstCol.id} ("${tstCol.title}")`);
         }
       }).catch((err) => log('column detection failed: ' + err.message));
 
