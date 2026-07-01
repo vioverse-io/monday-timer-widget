@@ -16,10 +16,10 @@ const safetyNets = require('./safety-nets');
 const isDev = process.argv.includes('--dev');
 
 const PILL_SIZE = { w: 120, h: 40 };
-const DEFAULT_FULL_SIZE = { w: 340, h: 300 };
+const DEFAULT_FULL_SIZE = { w: 340, h: 360 };
 const VIEW_SIZES = {
-  idle:    { w: 340, h: 300 },
-  running: { w: 340, h: 248 },
+  idle:    { w: 340, h: 360 },
+  running: { w: 340, h: 324 },
   picker:  { w: 340, h: 480 },
 };
 
@@ -96,7 +96,7 @@ function effectiveTheme() {
   return t;
 }
 function themeBg(theme) {
-  return theme === 'light' ? '#FFFFFF' : '#1E2740';
+  return theme === 'light' ? '#F5F1EB' : '#1E1B17';
 }
 function applyThemeToWindows() {
   const bg = themeBg(effectiveTheme());

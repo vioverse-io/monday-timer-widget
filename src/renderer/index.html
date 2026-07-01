@@ -39,9 +39,16 @@
       <div id="view-idle" class="view view-idle">
         <div class="idle-brand">
           <div class="idle-brand-tile">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><polyline points="8 4.5 8 8 10.5 9.5"/></svg>
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="8.4" fill="none" stroke-width="2.4" style="stroke:var(--border)"/>
+              <circle cx="12" cy="12" r="8.4" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="30 53" transform="rotate(-126 12 12)" style="stroke:var(--accent-red)"/>
+              <circle cx="12" cy="12" r="1.9" style="fill:var(--accent-red)"/>
+            </svg>
           </div>
-          <span class="idle-brand-name">CM Timer</span>
+          <div class="idle-brand-text">
+            <span class="idle-brand-name">CM Timer</span>
+            <span class="idle-brand-sub">Ready when you are.</span>
+          </div>
         </div>
         <div id="idle-recents-wrap" class="idle-recents-wrap">
           <div id="idle-recents-label" class="section-label hidden">RECENT</div>
@@ -55,15 +62,21 @@
 
       <!-- Running -->
       <div id="view-running" class="view hidden">
-        <div class="job-line">
-          <span id="job-number" class="job-number">—</span>
-          <span id="job-name" class="job-name">—</span>
-        </div>
-        <div class="time-row">
-          <span id="elapsed" class="elapsed">0:00</span>
-        </div>
-        <div class="totals">
-          <span id="today">Today 0m</span><span class="totals-sep"> · </span><span id="total">Total 0m</span>
+        <div class="run-card">
+          <div class="job-line">
+            <span id="job-number" class="job-number">—</span>
+            <span id="job-name" class="job-name">—</span>
+          </div>
+          <div class="time-row">
+            <span id="elapsed" class="elapsed">0:00</span>
+          </div>
+          <div class="track">
+            <div id="track-fill" class="track-fill"></div>
+            <div id="track-knob" class="track-knob"></div>
+          </div>
+          <div class="totals">
+            <span id="today">Today 0m</span><span class="totals-sep"> · </span><span id="total">Total 0m</span>
+          </div>
         </div>
         <div class="btn-row">
           <button id="stop-btn" class="btn btn-stop">
@@ -76,8 +89,12 @@
           </button>
         </div>
         <div class="btn-row distract-row">
-          <button id="sub5-btn" class="btn btn-ghost btn-distract">−5 min</button>
-          <button id="sub15-btn" class="btn btn-ghost btn-distract">−15 min</button>
+          <button id="sub5-btn" class="btn btn-distract">−5m</button>
+          <button id="sub15-btn" class="btn btn-distract">−15m</button>
+          <button id="log-btn" class="btn-log" title="Log time to Monday">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V3M5 6 8 3 11 6M3 12h10"/></svg>
+            Log to Monday
+          </button>
         </div>
         <span id="distract-flash" class="distract-flash hidden"></span>
       </div>

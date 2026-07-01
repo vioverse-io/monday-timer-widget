@@ -161,6 +161,11 @@
     $('today').innerHTML = 'Today <strong>' + fmtToday(today) + '</strong>';
     $('total').innerHTML = 'Total <strong>' + fmtToday(total) + '</strong>';
     $('pill-time').textContent = fmtPill(elapsed);
+    // Decorative progress track: fills across the current hour.
+    const pct = ((Math.floor(elapsed / 1000) % 3600) / 3600) * 100;
+    const tf = $('track-fill'), tk = $('track-knob');
+    if (tf) tf.style.width = pct + '%';
+    if (tk) tk.style.left = pct + '%';
   }
 
   // ---- state ----
@@ -486,9 +491,10 @@
     renderJob(itemName);
     $('elapsed').textContent = fmtClock(elapsedMs);
     $('today').textContent = '';
-    $('total').textContent = 'Session logged';
+    $('total').textContent = 'Session saved';
     $('topbar-label').textContent = 'STOPPED';
     setDot(false);
+    $('status-dot').className = 'dot dot-red';
     // Change Stop to Done
     $('stop-btn').innerHTML =
       '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Done';
@@ -503,6 +509,7 @@
     // Restore Stop button
     $('stop-btn').innerHTML =
       '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg> Stop';
+    setDot(false);
     setView('idle');
   }
 
@@ -674,6 +681,12 @@
     $('sub15-btn').addEventListener('click', () => {
       if (stoppedSession) adjustStoppedSession(15 * 60 * 1000, '-15:00');
       else subtractTime(15 * 60 * 1000, '-15:00');
+    });
+
+    // Log to Monday — surfaces the existing per-job log flow from the running/stopped view.
+    $('log-btn').addEventListener('click', () => {
+      const id = stoppedSession ? stoppedSession.itemId : state.itemId;
+      if (id) doLogTime(id);
     });
 
     // Refresh jobs
