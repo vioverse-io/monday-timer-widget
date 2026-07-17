@@ -17,6 +17,7 @@
   let stoppedSession = null;  // { itemId, itemName, elapsedMs } — post-stop adjustment window
   let stoppedTimer = null;
   let lastStoppedItemId = null; // highlights the last-stopped job in the picker
+  let pillRunning = null; // running-state the pill window is currently sized for
 
   // ---- formatters ----
   const pad = (n) => String(n).padStart(2, '0');
@@ -122,6 +123,7 @@
       : 'NO TIMER';
 
     if (name !== 'pill') prevFullView = name;
+    if (name === 'pill') { renderPill(); pillRunning = state.running; if (state.running) startTick(); }
     api.viewChanged(name);
   }
 
@@ -161,6 +163,7 @@
     $('today').innerHTML = 'Today <strong>' + fmtToday(today) + '</strong>';
     $('total').innerHTML = 'Total <strong>' + fmtToday(total) + '</strong>';
     $('pill-time').textContent = fmtPill(elapsed);
+    $('pill-today').textContent = fmtPill(today);
     // Decorative progress track: fills across the current hour.
     const pct = ((Math.floor(elapsed / 1000) % 3600) / 3600) * 100;
     const tf = $('track-fill'), tk = $('track-knob');
@@ -192,6 +195,19 @@
 
     if (s.running) startTick();
     else { stopTick(); if (!stoppedSession) renderIdleRecents(); }
+
+    if (view === 'pill') {
+      renderPill();
+      if (pillRunning !== s.running) { pillRunning = s.running; api.viewChanged('pill'); }
+    }
+  }
+
+  // The job Stop should offer to resume: the one just stopped, else the most recent.
+  function resumeTarget() {
+    const byId = {};
+    (jobs.all || []).forEach((j) => { byId[j.id] = j; });
+    if (lastStoppedItemId && byId[lastStoppedItemId]) return byId[lastStoppedItemId];
+    return (jobs.recents || [])[0] || null;
   }
 
   function renderIdleRecents() {
@@ -199,7 +215,7 @@
     const label = $('idle-recents-label');
     if (!wrap) return;
     wrap.innerHTML = '';
-    const recents = (jobs.recents || []).slice(0, 5);
+    const recents = (jobs.recents || []).slice(0, 4);
     if (label) label.classList.toggle('hidden', !recents.length);
     if (!recents.length) return;
     for (const j of recents) {
@@ -544,7 +560,12 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => $('toast').classList.add('hidden'), t.durationMs || 6000);
   }
+  function ensureFullView() {
+    if (view === 'pill') setView(state.running ? 'running' : 'idle');
+  }
+
   function showAlert(a) {
+    ensureFullView();
     $('alert-msg').textContent = a.message;
     const wrap = $('alert-actions');
     wrap.innerHTML = '';
@@ -563,6 +584,7 @@
     $('alert').classList.remove('hidden');
   }
   function showMorning(saved) {
+    ensureFullView();
     $('morning-msg').textContent = `A timer was left running on ${shortName(
       saved.itemName
     )} since ${new Date(saved.startedAt).toLocaleString()}. What should we do?`;
@@ -577,31 +599,82 @@
     }
   }
 
+  function renderPill() {
+    const running = state.running;
+    const resume = running ? null : resumeTarget();
+    $('pill-controls').classList.toggle('hidden', !running);
+    $('pill-resume-wrap').classList.toggle('hidden', running || !resume);
+    $('pill-idle').classList.toggle('hidden', running || !!resume);
+    if (running) {
+      renderTime();                          // paint now; the 1s tick keeps it live
+    } else {
+      $('pill-time').textContent = '';
+      $('pill-today').textContent = '';
+      const n = resume ? jobNum(resume.name) : '';
+      $('pill-number').textContent = n || '';
+      $('pill-number').classList.toggle('hidden', !n);
+    }
+  }
+
   // ---- pill: click to expand, drag to move ----
   // The pill can't be a -webkit-app-region drag target (that swallows clicks), so we
   // implement move + click here with pointer capture (so it keeps tracking off-window).
   function bindPill() {
-    const pill = $('view-pill');
+    const grab = $('pill-grab');
+    const info = $('pill-info');
+    const expandPill = () => setView(state.running ? 'running' : 'idle');
     let drag = null;
-    pill.addEventListener('pointerdown', (e) => {
-      try { pill.setPointerCapture(e.pointerId); } catch (_) { /* synthetic/edge */ }
-      drag = { x: e.screenX, y: e.screenY, moved: false };
+
+    grab.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { grab.setPointerCapture(e.pointerId); } catch (_) { /* synthetic */ }
+      drag = { sx: e.screenX, sy: e.screenY };
+      api.moveStart();
     });
-    pill.addEventListener('pointermove', (e) => {
+    grab.addEventListener('pointermove', (e) => {
       if (!drag) return;
-      const dx = e.screenX - drag.x;
-      const dy = e.screenY - drag.y;
-      if (drag.moved || Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-        drag.moved = true;
-        api.moveWindow(dx, dy);
-        drag.x = e.screenX;
-        drag.y = e.screenY;
-      }
+      api.moveTo(e.screenX - drag.sx, e.screenY - drag.sy);
     });
-    pill.addEventListener('pointerup', () => {
-      if (drag && !drag.moved) setView(state.running ? 'running' : 'idle');
-      drag = null;
+    grab.addEventListener('pointerup', () => { if (drag) api.moveEnd(); drag = null; });
+
+    info.addEventListener('click', expandPill);
+    // Escape hatches: double-click anywhere on the bar, or press Esc.
+    $('view-pill').addEventListener('dblclick', expandPill);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && view === 'pill') expandPill();
     });
+
+    const onBtn = (fn) => (e) => { e.stopPropagation(); fn(e); };
+    $('pill-stop').addEventListener('click', onBtn(async () => {
+      const itemId = state.itemId;
+      const s = await api.stop();
+      applyAfterAction(s);
+      lastStoppedItemId = itemId;
+      renderPill();
+      api.viewChanged('pill');
+    }));
+    $('pill-switch').addEventListener('click', onBtn(() => {
+      if (state.running) lastStoppedItemId = state.itemId;
+      openPicker('switch');
+    }));
+    $('pill-sub5').addEventListener('click', onBtn(() => subtractTime(5 * 60 * 1000, '-5:00')));
+    $('pill-sub15').addEventListener('click', onBtn(() => subtractTime(15 * 60 * 1000, '-15:00')));
+    $('pill-comment').addEventListener('click', onBtn(() => {
+      const id = state.itemId; if (!id) return;
+      setView('running');
+      doLogTime(id);
+    }));
+    $('pill-resume').addEventListener('click', onBtn(async () => {
+      const job = resumeTarget();
+      if (!job) { openPicker('start'); return; }
+      const s = await api.startJob({ itemId: job.id, itemName: job.name });
+      applyAfterAction(s);
+      lastStoppedItemId = null;
+      renderPill();
+      api.viewChanged('pill');
+    }));
+    $('pill-start').addEventListener('click', onBtn(() => openPicker('start')));
+    $('pill-expand').addEventListener('click', onBtn(expandPill));
   }
 
   // ---- resize grip (bottom-right) ----

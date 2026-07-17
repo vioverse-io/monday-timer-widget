@@ -239,46 +239,82 @@ async function logSession(itemId, startedAt, endedAt) {
 }
 
 /**
- * Post an export comment on a Monday item.
- * @param {string} itemId   Monday item id
- * @param {number} durationMs  total ms to report
- * @param {number} exportId    sequential export number (e.g. 1, 2, 3)
- * @param {string} [note]      optional one-line note (omitted from comment if empty)
+ * Read the job's current "Time Spent" value from Monday. The NUMBERS column is the
+ * canonical store and holds WHOLE MINUTES (e.g. "23"). Returns milliseconds.
+ *   - Empty cell            → 0   (safe to add onto)
+ *   - Column not detected   → null (caller must NOT write, to avoid clobbering)
+ *   - Read/network failure  → null (caller must NOT write; log-time will retry)
+ * Never throws.
  */
+async function readTimeSpentMs(itemId) {
+  if (isDemoMode || !timeSpentColumnId) return null;
+  try {
+    const data = await gql(
+      `query ($i: [ID!], $c: [String!]) {
+         items(ids: $i) { column_values(ids: $c) { id text value } }
+       }`,
+      { i: [String(itemId)], c: [timeSpentColumnId] }
+    );
+    const cv = data.items?.[0]?.column_values?.[0];
+    const raw = (cv?.text ?? '').toString().trim();
+    if (!raw) return 0; // empty cell — start from zero
+    const minutes = parseFloat(raw.replace(/,/g, ''));
+    if (!isFinite(minutes) || minutes < 0) return 0;
+    return Math.round(minutes * 60000);
+  } catch {
+    return null; // couldn't read — signal "unknown" so we never overwrite
+  }
+}
+
 /**
- * On Log-to-Monday:
- *   1) Update both Time Spent columns with the all-time total.
- *   2) Post a comment ONLY when a note was entered (or as fallback if columns
- *      weren't detected, so a logged session is never silently dropped).
- *      Comment = just the note text, no timing info (columns have that).
+ * ADD time to Monday's "Time Spent" — the ONLY place the number is written.
+ * Called on every Stop/Switch (accumulateSession) with that session's duration.
+ * Reads the current value, ADDS this session, writes the SUM — so time already on
+ * the board (hand-entered, a coworker's, or another device) is preserved, never
+ * overwritten. Root-cause fix for: a local total of 3m clobbering Monday's 20m.
+ *
+ * @param addMs  the completed session's duration to add (ms).
+ * Never overwrites: if the current value can't be read, it throws instead of guessing.
+ */
+async function addTimeSpent(itemId, addMs) {
+  if (isDemoMode || !timeSpentColumnId) return { ok: false, reason: 'no-column' };
+  const add = Math.max(0, addMs || 0);
+  if (add === 0) return { ok: true, newTotalMs: null };
+  const existingMs = await readTimeSpentMs(itemId);
+  if (existingMs === null) {
+    throw new Error("Couldn't read current Time Spent from Monday — not overwriting.");
+  }
+  const newTotalMs = existingMs + add;
+  await updateTimeSpent(itemId, newTotalMs); // writes text then numbers (canonical last)
+  return { ok: true, newTotalMs };
+}
+
+/**
+ * "Comment to Monday" — posts a note as an update on the item. NOTE ONLY.
+ * It does NOT touch the Time Spent number (that's handled additively on Stop), and
+ * the caller does NOT reset the timer or local totals. An empty note is a no-op.
+ * (sessionMs/totalMs/sessionCount are unused now; kept for signature compatibility.)
  */
 async function logExport(itemId, sessionMs, totalMs, sessionCount, note) {
-  if (isDemoMode) {
-    return { ok: true };
-  }
-
-  // 1) Update both Time Spent columns with the all-time total.
-  await updateTimeSpent(itemId, totalMs);
-
-  // 2) Comment — just the note, no timing metadata.
+  if (isDemoMode) return { ok: true };
   const trimmed = (note || '').trim();
-  if (trimmed || !timeSpentColumnId) {
-    await gql(
-      `mutation ($i: ID!, $body: String!) {
-         create_update(item_id: $i, body: $body) { id }
-       }`,
-      { i: itemId, body: trimmed }
-    );
-  }
-
+  if (!trimmed) return { ok: true }; // nothing to post
+  await gql(
+    `mutation ($i: ID!, $body: String!) {
+       create_update(item_id: $i, body: $body) { id }
+     }`,
+    { i: itemId, body: trimmed }
+  );
   return { ok: true };
 }
 
 /**
- * Write the job's all-time total to both Time Spent columns (called on every stop).
- *   Numbers column: decimal hours (e.g. "3.67")
- *   Text column: formatted (e.g. "7h 10m 0s")
- * Fire-and-forget — errors are logged but don't block the stop.
+ * Write an ABSOLUTE all-time total to both Time Spent columns.
+ *   Numbers column: whole minutes (e.g. "23")   ← canonical, read back on next log
+ *   Text column:    formatted (e.g. "7h 10m 0s")
+ * The NUMBERS column is written LAST because logExport() reads it back to compute the
+ * next additive total — committing it last keeps a retry safe if an earlier write fails.
+ * Only called from logExport (on Log-to-Monday). We no longer auto-write on every stop.
  */
 async function updateTimeSpent(itemId, totalMs) {
   if (isDemoMode) return;
@@ -287,18 +323,7 @@ async function updateTimeSpent(itemId, totalMs) {
   const m = Math.floor((ms % 3600000) / 60000);
   const s = Math.floor((ms % 60000) / 1000);
 
-  // Numbers column — total minutes
-  if (timeSpentColumnId) {
-    const minutes = Math.round(ms / 60000);
-    await gql(
-      `mutation ($b: ID!, $i: ID!, $c: String!, $val: String!) {
-         change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
-       }`,
-      { b: boardId, i: itemId, c: timeSpentColumnId, val: String(minutes) }
-    );
-  }
-
-  // Text column — "7h 10m 0s"
+  // Text column first (display only — "7h 10m 0s").
   if (timeSpentTextColumnId) {
     const formatted = `${h}h ${m}m ${s}s`;
     await gql(
@@ -306,6 +331,17 @@ async function updateTimeSpent(itemId, totalMs) {
          change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
        }`,
       { b: boardId, i: itemId, c: timeSpentTextColumnId, val: formatted }
+    );
+  }
+
+  // Numbers column LAST — canonical value (whole minutes).
+  if (timeSpentColumnId) {
+    const minutes = Math.round(ms / 60000);
+    await gql(
+      `mutation ($b: ID!, $i: ID!, $c: String!, $val: String!) {
+         change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
+       }`,
+      { b: boardId, i: itemId, c: timeSpentColumnId, val: String(minutes) }
     );
   }
 }
@@ -344,7 +380,9 @@ module.exports = {
   getItems,
   logSession,
   logExport,
+  addTimeSpent,
   updateTimeSpent,
+  readTimeSpentMs,
   testConnection,
   API_VERSION
 };

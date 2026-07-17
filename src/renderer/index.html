@@ -125,11 +125,45 @@
     <!-- Demo-mode footer label (shown only in demo mode) -->
     <div id="demo-footer" class="demo-footer hidden">DEMO MODE</div>
 
-    <!-- Collapsed pill (click to expand, drag to move) -->
     <div id="view-pill" class="pill hidden">
-      <span id="pill-dot" class="dot dot-gray"></span>
-      <span id="pill-number" class="pill-number"></span>
-      <span id="pill-time" class="pill-time">0m</span>
+      <span id="pill-grab" class="pill-grab" title="Drag to move">
+        <svg width="8" height="15" viewBox="0 0 8 15" fill="currentColor"><circle cx="2" cy="2.5" r="1.1"/><circle cx="6" cy="2.5" r="1.1"/><circle cx="2" cy="7.5" r="1.1"/><circle cx="6" cy="7.5" r="1.1"/><circle cx="2" cy="12.5" r="1.1"/><circle cx="6" cy="12.5" r="1.1"/></svg>
+      </span>
+      <div id="pill-info" class="pill-info" title="Click to expand">
+        <span id="pill-dot" class="dot dot-gray"></span>
+        <span id="pill-number" class="pill-number"></span>
+        <span id="pill-time" class="pill-time"></span>
+        <span id="pill-today" class="pill-today"></span>
+      </div>
+      <div id="pill-controls" class="pill-controls">
+        <span class="pill-div"></span>
+        <button id="pill-sub5" class="pill-mbtn" title="Subtract 5 min">−5</button>
+        <button id="pill-sub15" class="pill-mbtn" title="Subtract 15 min">−15</button>
+        <button id="pill-comment" class="pill-cbtn" title="Comment to Monday">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 3.5h10v7H8.5L5.5 13v-2.5H3z"/></svg>
+        </button>
+        <button id="pill-switch" class="pill-ibtn" title="Switch job">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5 H12 M10 3 L12 5 L10 7 M13 11 H4 M6 9 L4 11 L6 13"/></svg>
+        </button>
+        <button id="pill-stop" class="pill-stop" title="Stop">
+          <svg width="13" height="13" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <div id="pill-resume-wrap" class="pill-idle hidden">
+        <button id="pill-resume" class="pill-start" title="Resume last job">
+          <svg width="12" height="12" viewBox="0 0 16 16"><polygon points="4 2.5 13 8 4 13.5" fill="currentColor"/></svg>
+          Resume
+        </button>
+        <button id="pill-expand" class="pill-ibtn" title="Expand">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h4v4 M7 13H3v-4 M13 3l-4 4 M3 13l4-4"/></svg>
+        </button>
+      </div>
+      <div id="pill-idle" class="pill-idle hidden">
+        <button id="pill-start" class="pill-start" title="Start a job">
+          <svg width="12" height="12" viewBox="0 0 16 16"><polygon points="4 2.5 13 8 4 13.5" fill="currentColor"/></svg>
+          Start a job
+        </button>
+      </div>
     </div>
 
     <!-- Bottom-right resize grip (full views only) -->

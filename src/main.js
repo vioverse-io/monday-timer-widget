@@ -15,10 +15,11 @@ const safetyNets = require('./safety-nets');
 
 const isDev = process.argv.includes('--dev');
 
-const PILL_SIZE = { w: 120, h: 40 };
+const PILL_SIZE = { w: 392, h: 48 };       // running: grabber + info + controls
+const PILL_SIZE_IDLE = { w: 172, h: 48 };  // idle/resume: grabber + one action
 const DEFAULT_FULL_SIZE = { w: 340, h: 360 };
 const VIEW_SIZES = {
-  idle:    { w: 340, h: 360 },
+  idle:    { w: 340, h: 392 },
   running: { w: 340, h: 324 },
   picker:  { w: 340, h: 480 },
 };
@@ -201,6 +202,14 @@ function createMainWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
   mainWindow.on('move', savePosition);
+  // Self-heal: if ANYTHING resizes the window while it's a pill (native quirks,
+  // stray setBounds), snap it back. Makes a broken/tiny pill state impossible.
+  mainWindow.on('resize', () => {
+    if (currentView !== 'pill' || !mainWindow || mainWindow.isDestroyed()) return;
+    const p = timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE;
+    const [w, h] = mainWindow.getContentSize();
+    if (w !== p.w || h !== p.h) mainWindow.setContentSize(p.w, p.h);
+  });
   // Surface renderer warnings/errors to the log file for diagnosis.
   mainWindow.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) log('renderer: ' + message);
@@ -218,16 +227,28 @@ function resizeForView(view) {
   currentView = view;
   if (view !== 'pill') lastFullView = view;
 
-  const [x, y] = mainWindow.getPosition();
+  const b = mainWindow.getBounds();
+
   if (view === 'pill') {
-    mainWindow.setContentSize(PILL_SIZE.w, PILL_SIZE.h);
-  } else {
-    const size = VIEW_SIZES[view] || VIEW_SIZES.idle;
-    mainWindow.setContentSize(size.w, size.h);
+    const p = timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE;
+    const x = Math.round(b.x + b.width - p.w);   // keep right edge fixed (grows leftward)
+    mainWindow.setMaximumSize(0, 0);             // unlock first (in case of pill→pill)
+    mainWindow.setMinimumSize(p.w, p.h);
+    mainWindow.setContentSize(p.w, p.h);
+    mainWindow.setPosition(x, b.y);
+    // Lock min == max: native edge-resize can do nothing. NO setResizable toggling —
+    // that call is what collapsed the frameless window on Windows.
+    mainWindow.setMaximumSize(p.w, p.h);
+    return;
   }
-  // Restore position if setContentSize shifted it
-  const [x2, y2] = mainWindow.getPosition();
-  if (x2 !== x || y2 !== y) mainWindow.setPosition(x, y);
+
+  // Full views: unlock and restore normal minimums.
+  mainWindow.setMaximumSize(0, 0);               // 0,0 = no maximum
+  mainWindow.setMinimumSize(280, 150);
+  const size = VIEW_SIZES[view] || VIEW_SIZES.idle;
+  const x = Math.round(b.x + b.width - size.w);  // keep right edge fixed here too
+  mainWindow.setContentSize(size.w, size.h);
+  mainWindow.setPosition(x, b.y);
 }
 
 function showWidget() {
@@ -404,10 +425,11 @@ function accumulateSession(session) {
     jt.todayMs = session.durationMs;
   }
   settings.setJobTimer(session.itemId, jt);
-  // Auto-write to Monday "Time Spent" columns (fire-and-forget).
+  // Add THIS session to Monday's Time Spent (reads current value + adds; never
+  // overwrites). Fire-and-forget; local totals above are the source of truth.
   if (!demoMode) {
-    api.updateTimeSpent(session.itemId, jt.totalMs)
-      .catch((err) => log('updateTimeSpent failed: ' + err.message));
+    api.addTimeSpent(session.itemId, session.durationMs)
+      .catch((err) => log('addTimeSpent failed: ' + err.message));
   }
 }
 
@@ -675,39 +697,18 @@ function registerIpc() {
     };
   });
 
+  // "Comment to Monday" — posts a note only. Does NOT write the Time Spent number
+  // (that happens additively on Stop) and does NOT reset the timer or local totals.
   ipcMain.handle('log-time', async (_e, { itemId, note }) => {
-    const jt = settings.getJobTimer(itemId);
-    let runningMs = 0;
-    if (timer.isRunning() && timer.itemId === itemId) runningMs = timer.getElapsed();
-    const sessionMs = jt.deltaMs + runningMs;
-    if (sessionMs <= 0) return { ok: false, error: 'No time to log.' };
-    const totalMs = jt.totalMs + runningMs;
-    // Count current running session if it's this job
-    const sessionCount = (jt.sessionCount || 0) + (timer.isRunning() && timer.itemId === itemId ? 1 : 0);
-    const exportId = jt.exportCount + 1;
+    const trimmed = (note || '').trim();
+    if (!trimmed) return { ok: true }; // nothing to post
     try {
-      await api.logExport(itemId, sessionMs, totalMs, sessionCount, note);
-      // Reset delta and session count, keep lifetime total
-      jt.exportCount = exportId;
-      jt.deltaMs = 0;
-      jt.todayMs = 0;
-      jt.todayDate = new Date().toDateString();
-      jt.sessionCount = 0;
-      settings.setJobTimer(itemId, jt);
-      // If timer is running on this job, reset bases so the clock starts fresh
-      if (timer.isRunning() && timer.itemId === itemId) {
-        timer.startedAt = Date.now();
-        timer.subtractedMs = 0;
-        timer.todayMsBase = 0;
-        timer.totalMsBase = 0;
-        persistRunning();
-        pushState();
-      }
-      log(`log-time item=${itemId} session=${sessionMs}ms total=${totalMs}ms export=#${exportId}`);
-      return { ok: true, exportId, sessionMs, totalMs };
+      await api.logExport(itemId, 0, 0, 0, trimmed);
+      log(`comment item=${itemId}`);
+      return { ok: true };
     } catch (err) {
-      log(`log-time failed: ${err.message}`);
-      return { ok: false, error: err.message || 'Log failed.' };
+      log(`comment failed: ${err.message}`);
+      return { ok: false, error: err.message || 'Comment failed.' };
     }
   });
 
@@ -715,12 +716,19 @@ function registerIpc() {
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
   ipcMain.on('quit-app', () => { app.isQuitting = true; app.quit(); });
-  // Custom drag/resize for frameless areas that can't use -webkit-app-region.
-  ipcMain.on('move-window', (_e, { dx, dy }) => {
+  // Pill move: capture origin on start, apply absolute delta each move. No feedback loop.
+  let moveDrag = null;
+  ipcMain.on('move-start', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    const [x, y] = mainWindow.getPosition();
-    mainWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+    const b = mainWindow.getBounds();
+    moveDrag = { x: b.x, y: b.y };
   });
+  ipcMain.on('move-to', (_e, { dx, dy }) => {
+    if (!mainWindow || mainWindow.isDestroyed() || !moveDrag) return;
+    if (typeof dx !== 'number' || typeof dy !== 'number' || !isFinite(dx) || !isFinite(dy)) return;
+    mainWindow.setPosition(Math.round(moveDrag.x + dx), Math.round(moveDrag.y + dy));
+  });
+  ipcMain.on('move-end', () => { moveDrag = null; });
   // Resize grip: absolute-delta approach with atomic setBounds to avoid the
   // feedback loop from incremental setContentSize + setPosition.
   let resizeDrag = null;
