@@ -166,11 +166,7 @@ function savePosition() {
 
 function createMainWindow() {
   const pos = restorePosition();
-  const u = settings.get('userSize') || { dw: 0, dh: 0 };
-  const start = {
-    w: Math.max(280, VIEW_SIZES.idle.w + (u.dw || 0)),
-    h: Math.max(150, VIEW_SIZES.idle.h + (u.dh || 0))
-  };
+  const start = VIEW_SIZES.idle;
   mainWindow = new BrowserWindow({
     width: start.w,
     height: start.h,
@@ -244,13 +240,13 @@ function resizeForView(view, pillW) {
     return;
   }
 
-  // Full views: unlock, restore minimums, apply the user's saved resize delta.
+  // Full views: FIXED size per view. HANDOFF-6's userSize delta is reverted — it leaked
+  // one view's grip-resize into every view and the launch size. Grip-resize still works
+  // within a view; switching views snaps back to the standard size (accepted quirk).
   currentPillSize = null;
   mainWindow.setMaximumSize(0, 0);               // 0,0 = no maximum
   mainWindow.setMinimumSize(280, 150);
-  const base = VIEW_SIZES[view] || VIEW_SIZES.idle;
-  const u = settings.get('userSize') || { dw: 0, dh: 0 };
-  const size = { w: Math.max(280, base.w + (u.dw || 0)), h: Math.max(150, base.h + (u.dh || 0)) };
+  const size = VIEW_SIZES[view] || VIEW_SIZES.idle;
   const x = Math.round(b.x + b.width - size.w);  // keep right edge fixed here too
   mainWindow.setContentSize(size.w, size.h);
   mainWindow.setPosition(x, b.y);
@@ -828,13 +824,7 @@ function registerIpc() {
     const nh = Math.max(150, Math.min(1000, resizeDrag.height + dh));
     mainWindow.setBounds({ x: resizeDrag.x, y: resizeDrag.y, width: nw, height: nh });
   });
-  ipcMain.on('resize-end', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    const [w, h] = mainWindow.getContentSize();
-    const base = VIEW_SIZES[currentView] || VIEW_SIZES.idle;
-    settings.set('userSize', { dw: w - base.w, dh: h - base.h });
-    resizeDrag = null;
-  });
+  ipcMain.on('resize-end', () => { resizeDrag = null; });
   ipcMain.on('open-settings', openSettingsWindow);
   ipcMain.on('dismiss-banner', () => { bannerVisible = false; pushState(); });
   ipcMain.on('refresh-jobs', () => pushJobs());
@@ -927,6 +917,7 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     refreshMode();
+    settings.set('userSize', { dw: 0, dh: 0 }); // wipe HANDOFF-6's leaked resize delta
 
     createMainWindow();
     createTray();

@@ -609,7 +609,7 @@ textarea.search {
 .job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); background: var(--chip-bg); }
 
 /* ================= COLLAPSED MINI CONTROLLER ================= */
-.app.is-pill { background: transparent; }
+.app.is-pill { background: transparent; align-items: flex-end; }
 .pill {
   --p-fg:#F3EEE7; --p-dim:#9A9184;
   --p-bar:#1E1B17; --p-bar-bd:#38322B;
@@ -618,6 +618,7 @@ textarea.search {
   --p-cmt-bg:rgba(233,84,104,.22); --p-cmt-fg:#F7A6B5;
   --p-grab:#6E6659; --p-red:#EA5468;
   height: 100vh;
+  width: max-content;
   display: inline-flex; align-items: center; gap: 7px;
   background: var(--p-bar); border: 1px solid var(--p-bar-bd);
   border-radius: 23px; box-shadow: 0 12px 30px rgba(0,0,0,.55);

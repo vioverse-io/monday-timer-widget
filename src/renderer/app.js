@@ -711,6 +711,7 @@
       renderPill();
       sendPillSize();
     }));
+    $('pill-resume-switch').addEventListener('click', onBtn(() => openPicker('start')));
     $('pill-start').addEventListener('click', onBtn(() => openPicker('start')));
     $('pill-expand').addEventListener('click', onBtn(expandPill));
   }
