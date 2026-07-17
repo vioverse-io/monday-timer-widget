@@ -22,7 +22,8 @@
       { id: 'g1', title: 'Priority - Assigned Projects', color: '#E2445C' },
       { id: 'g2', title: 'Low Priority Projects', color: '#0073EA' },
       { id: 'g3', title: 'Declined Requests', color: '#FDAB3D' }
-    ])
+    ]),
+    getColumns: () => Promise.resolve({ ok: false, columns: [], detected: '', manual: '' })
   };
 
   function friendly(accel) {
@@ -43,19 +44,22 @@
     input.value = 'Press keys…';
     function onKey(e) {
       e.preventDefault();
+      const k = e.key;
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(k)) return;
+      if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        input.value = 'Add Ctrl, Alt or Win…';
+        return;
+      }
       const parts = [];
       if (e.ctrlKey) parts.push('CommandOrControl');
       if (e.altKey) parts.push('Alt');
       if (e.shiftKey) parts.push('Shift');
       if (e.metaKey) parts.push('Super');
-      const k = e.key;
-      if (!['Control', 'Alt', 'Shift', 'Meta'].includes(k)) {
-        parts.push(k.length === 1 ? k.toUpperCase() : k);
-        const accel = parts.join('+');
-        input.dataset.accel = accel;
-        input.value = friendly(accel);
-        cleanup();
-      }
+      parts.push(k.length === 1 ? k.toUpperCase() : k);
+      const accel = parts.join('+');
+      input.dataset.accel = accel;
+      input.value = friendly(accel);
+      cleanup();
     }
     function onEsc(e) {
       if (e.key === 'Escape') { cleanup(); input.value = friendly(input.dataset.accel || ''); }
@@ -92,6 +96,24 @@
     $('theme').value = s.theme || 'dark';
     applyTheme(s.theme || 'dark');
 
+    // Time Spent column picker (real mode only; demo returns none).
+    if (api.getColumns) {
+      const info = await api.getColumns();
+      const sel = $('ts-col');
+      (info.columns || []).forEach((c) => {
+        const o = document.createElement('option');
+        o.value = c.id;
+        o.textContent = c.title;
+        sel.appendChild(o);
+      });
+      sel.value = info.manual || '';
+      const st = $('ts-col-status');
+      if (info.manual) st.textContent = 'Manual override in use.';
+      else if (info.detected) st.textContent = `Auto-detected: "${info.detected}"`;
+      else if (info.ok) st.textContent = 'No Time Spent numbers column found — pick one above.';
+      else st.textContent = 'Connect to Monday, save, then reopen Settings to load columns.';
+    }
+
     // Auto-test connection if a token is present.
     if (s.apiToken) {
       const res = $('test-result');
@@ -122,7 +144,8 @@
         morningCheckin: { enabled: $('morning-on').checked }
       },
       launchOnStartup: $('startup-on').checked,
-      theme: $('theme').value
+      theme: $('theme').value,
+      timeSpentColumnManual: $('ts-col') ? $('ts-col').value : ''
     };
   }
 

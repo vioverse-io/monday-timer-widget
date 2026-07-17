@@ -18,6 +18,7 @@
   let stoppedTimer = null;
   let lastStoppedItemId = null; // highlights the last-stopped job in the picker
   let pillRunning = null; // running-state the pill window is currently sized for
+  let lastPillTimeLen = 0; // re-measure the pill when the clock gains a digit
 
   // ---- formatters ----
   const pad = (n) => String(n).padStart(2, '0');
@@ -123,8 +124,14 @@
       : 'NO TIMER';
 
     if (name !== 'pill') prevFullView = name;
-    if (name === 'pill') { renderPill(); pillRunning = state.running; if (state.running) startTick(); }
-    api.viewChanged(name);
+    if (name === 'pill') {
+      renderPill();
+      pillRunning = state.running;
+      if (state.running) startTick();
+      sendPillSize();
+    } else {
+      api.viewChanged(name);
+    }
   }
 
   function setDot(running) {
@@ -156,13 +163,23 @@
     // since midnight, minus subtracted time.
     const rawSinceMidnight = now - Math.max(state.startedAt, startOfLocalDay());
     const sinceMidnight = Math.max(0, rawSinceMidnight - sub);
-    const today = (state.todayMsBase || 0) + sinceMidnight;
+    // If the session started before local midnight, yesterday's logged base no longer
+    // belongs in "today" — only the portion of this session since midnight does.
+    const base = state.startedAt >= startOfLocalDay() ? (state.todayMsBase || 0) : 0;
+    const today = base + sinceMidnight;
     // Total = unexported delta (not lifetime)
     const total = (state.totalMsBase || 0) + elapsed;
     $('elapsed').textContent = fmtClock(elapsed);
     $('today').innerHTML = 'Today <strong>' + fmtToday(today) + '</strong>';
     $('total').innerHTML = 'Total <strong>' + fmtToday(total) + '</strong>';
-    $('pill-time').textContent = fmtPill(elapsed);
+    const pillClock = fmtClock(elapsed);
+    if ($('pill-time').textContent !== pillClock) {
+      $('pill-time').textContent = pillClock;
+      if (view === 'pill' && pillClock.length !== lastPillTimeLen) {
+        lastPillTimeLen = pillClock.length;
+        sendPillSize(); // clock gained/lost a digit (9:59 → 10:00) — re-fit the window
+      }
+    }
     $('pill-today').textContent = fmtPill(today);
     // Decorative progress track: fills across the current hour.
     const pct = ((Math.floor(elapsed / 1000) % 3600) / 3600) * 100;
@@ -174,6 +191,10 @@
   // ---- state ----
   function applyState(s) {
     state = s;
+    // A timer is running (started from tray/hotkey/anywhere) — the stale "stopped"
+    // summary and its Play button must never survive, or Play would clobber the
+    // new session.
+    if (s.running) clearStoppedSession();
     if (s.theme) document.documentElement.dataset.theme = s.theme;
     $('demo-footer').classList.toggle('hidden', !s.demoMode);
     $('welcome').classList.toggle('hidden', !s.firstRun);
@@ -198,7 +219,7 @@
 
     if (view === 'pill') {
       renderPill();
-      if (pillRunning !== s.running) { pillRunning = s.running; api.viewChanged('pill'); }
+      if (pillRunning !== s.running) { pillRunning = s.running; sendPillSize(); }
     }
   }
 
@@ -305,7 +326,8 @@
 
     const isActive = state.running && job.id === state.itemId;
     const isStopped = !isActive && job.id === lastStoppedItemId;
-    const color = groupColor();
+    const g = (jobs.groups || []).find((gr) => gr.id === job.groupId);
+    const color = g ? g.color : groupColor();
 
     if (isStopped) row.classList.add('stopped');
 
@@ -364,7 +386,8 @@
     const q = $('search').value.trim().toLowerCase();
     const match = (j) =>
       !q || j.name.toLowerCase().includes(q) || jobNum(j.name).includes(q);
-    const filtered = (jobs.all || []).filter((j) => filterJob(j) && match(j));
+    // Typing searches the WHOLE board; the group pills only scope browsing.
+    const filtered = (jobs.all || []).filter((j) => (q ? match(j) : filterJob(j)));
 
     const list = $('all-list');
     list.innerHTML = '';
@@ -509,13 +532,18 @@
     clearTimeout(stoppedTimer);
   }
 
-  function dismissStoppedSummary() {
+  // Clears post-stop adjustment state WITHOUT changing view (safe while running).
+  function clearStoppedSession() {
     if (!stoppedSession) return;
     stoppedSession = null;
     clearTimeout(stoppedTimer);
-    // Restore Stop button
     $('stop-btn').innerHTML =
       '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/></svg> Stop';
+  }
+
+  function dismissStoppedSummary() {
+    if (!stoppedSession) return;
+    clearStoppedSession();
     setDot(false);
     setView('idle');
   }
@@ -616,13 +644,23 @@
     }
   }
 
+  // Measure the bar's true rendered width and size the window to it. The bar is
+  // inline-flex so it always reports its natural content width, even if the window
+  // is currently narrower. +2px guards against fractional rounding.
+  function sendPillSize() {
+    const bar = $('view-pill');
+    if (!bar || bar.classList.contains('hidden')) { api.viewChanged('pill'); return; }
+    const w = Math.ceil(bar.getBoundingClientRect().width) + 2;
+    api.viewChanged('pill', w);
+  }
+
   // ---- pill: click to expand, drag to move ----
   // The pill can't be a -webkit-app-region drag target (that swallows clicks), so we
   // implement move + click here with pointer capture (so it keeps tracking off-window).
   function bindPill() {
     const grab = $('pill-grab');
     const info = $('pill-info');
-    const expandPill = () => setView(state.running ? 'running' : 'idle');
+    const expandPill = () => setView(prevFullView === 'picker' ? 'picker' : (state.running ? 'running' : 'idle'));
     let drag = null;
 
     grab.addEventListener('pointerdown', (e) => {
@@ -651,7 +689,7 @@
       applyAfterAction(s);
       lastStoppedItemId = itemId;
       renderPill();
-      api.viewChanged('pill');
+      sendPillSize();
     }));
     $('pill-switch').addEventListener('click', onBtn(() => {
       if (state.running) lastStoppedItemId = state.itemId;
@@ -671,7 +709,7 @@
       applyAfterAction(s);
       lastStoppedItemId = null;
       renderPill();
-      api.viewChanged('pill');
+      sendPillSize();
     }));
     $('pill-start').addEventListener('click', onBtn(() => openPicker('start')));
     $('pill-expand').addEventListener('click', onBtn(expandPill));
@@ -815,6 +853,11 @@
     activeGroupId = null;
     const s = await api.getState();
     applyState(s);
+
+    // Fonts can finish loading after the pill was measured — re-measure once ready.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => { if (view === 'pill') sendPillSize(); });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);

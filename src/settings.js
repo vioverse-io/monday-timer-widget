@@ -47,6 +47,14 @@ const defaults = {
   // Network resilience: completed sessions awaiting a successful Monday write
   retryQueue: [],
 
+  // Failed "add minutes to Monday" writes awaiting retry: [{itemId, itemName, addMs, at}]
+  pendingTimeWrites: [],
+
+  // Time Spent column: manual override chosen in Settings ('' = auto-detect),
+  // and the title of whatever was last auto-detected (for display in Settings).
+  timeSpentColumnManual: '',
+  detectedTimeSpent: '',
+
   // Crash recovery: the in-progress running session, persisted on every tick
   runningSession: null,
 

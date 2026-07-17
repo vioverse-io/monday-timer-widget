@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('timerAPI', {
   logTime: (itemId, note) => ipcRenderer.invoke('log-time', { itemId, note }),
 
   // ---- fire-and-forget ----
-  viewChanged: (view) => ipcRenderer.send('view-changed', view),
+  viewChanged: (view, pillW) => ipcRenderer.send('view-changed', view, pillW),
   collapse: () => ipcRenderer.send('collapse'),
   expand: () => ipcRenderer.send('expand'),
   moveStart: () => ipcRenderer.send('move-start'),
@@ -60,5 +60,6 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   get: () => ipcRenderer.invoke('settings:get'),
   save: (payload) => ipcRenderer.invoke('settings:save', payload),
   test: (payload) => ipcRenderer.invoke('settings:test', payload),
-  getGroups: (payload) => ipcRenderer.invoke('settings:get-groups', payload)
+  getGroups: (payload) => ipcRenderer.invoke('settings:get-groups', payload),
+  getColumns: () => ipcRenderer.invoke('settings:get-columns')
 });

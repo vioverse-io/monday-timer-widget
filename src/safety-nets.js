@@ -5,6 +5,10 @@
 // and is unit-testable. OS notifications are best-effort (Windows toast action buttons are
 // unreliable across versions), so every actionable nudge is ALSO surfaced as an in-widget
 // alert banner with buttons, which the renderer renders and routes back here.
+//
+// ALL day comparisons use the LOCAL calendar day. Never toISOString() here — that's UTC,
+// which for US timezones flips to "tomorrow" in the evening and broke the EOD nudge and
+// the morning check-in.
 
 const { powerMonitor } = require('electron');
 
@@ -13,6 +17,12 @@ let pollTimer = null;
 
 // Per-session bookkeeping reset whenever a new timer starts.
 let longSessionWarned = false;
+
+// Local calendar day as 'YYYY-MM-DD' (machine timezone).
+function localDay(ts) {
+  const d = ts ? new Date(ts) : new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function init(context) {
   ctx = context;
@@ -104,7 +114,7 @@ function checkLongSession() {
 function checkEod() {
   const cfg = settings().eodNudge;
   if (!cfg.enabled || !ctx.timer.isRunning()) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay();
   if (ctx.getEodDismissedDate() === today) return;
   const [h, m] = (cfg.time || '17:00').split(':').map(Number);
   const now = new Date();
@@ -128,8 +138,8 @@ function checkEod() {
 // Returns true if a modal was shown (so main knows not to auto-resume).
 function morningCheckIn(savedSession) {
   if (!settings().morningCheckin || !savedSession) return false;
-  const startDay = new Date(savedSession.startedAt).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
+  const startDay = localDay(savedSession.startedAt);
+  const today = localDay();
   if (startDay === today) return false; // same day → normal resume, no modal
   ctx.showMorningModal(savedSession);
   return true;

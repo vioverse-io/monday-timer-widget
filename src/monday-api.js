@@ -16,7 +16,7 @@ const ENDPOINT = 'https://api.monday.com/v2';
 // API-Version header. Monday wants the current stable version string. This MUST be
 // re-checked against the docs/changelog during Step 0 and updated if newer — do not
 // assume this remains current.
-const API_VERSION = '2025-01';
+const API_VERSION = '2026-01';
 
 let isDemoMode = false;
 let token = null;
@@ -158,7 +158,7 @@ async function getItems(groupIds, currentUserId) {
        boards(ids: $b) {
          groups(ids: $g) {
            id
-           items_page(limit: 100) {
+           items_page(limit: 500) {
              items {
                id
                name

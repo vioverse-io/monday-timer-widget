@@ -24,6 +24,13 @@
         <span>Board ID</span>
         <input id="boardId" type="text" placeholder="7833051194" />
       </label>
+      <label class="field">
+        <span>Time Spent column (minutes are written here)</span>
+        <select id="ts-col" class="select">
+          <option value="">Auto-detect</option>
+        </select>
+      </label>
+      <div id="ts-col-status" class="hint"></div>
       <div class="row">
         <button id="test-btn" class="btn btn-secondary" type="button">Test connection</button>
         <span id="test-result" class="result"></span>

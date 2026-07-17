@@ -37,6 +37,7 @@ let pendingMorning = null;
 let undoTimer = null;
 let lastFullView = 'idle';
 let currentView = 'idle';
+let currentPillSize = null;  // {w,h} the pill window is currently locked to (measured)
 
 // ---------------------------------------------------------------------------
 // Logging (weekly-rotated file in userData/logs)
@@ -127,7 +128,7 @@ function pushState() {
   }
 }
 function pushSyncStatus() {
-  const count = (settings.get('retryQueue') || []).length;
+  const count = (settings.get('pendingTimeWrites') || []).length;
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('sync-status', { count });
   }
@@ -163,16 +164,13 @@ function savePosition() {
   savePosTimer = setTimeout(() => settings.set('windowPosition', { x, y }), 400);
 }
 
-// One size for all full views. Pill has its own fixed size.
-function fullViewSize() {
-  const saved = settings.get('fullViewSize');
-  if (saved && saved.w && saved.h) return saved;
-  return DEFAULT_FULL_SIZE;
-}
-
 function createMainWindow() {
   const pos = restorePosition();
-  const start = fullViewSize();
+  const u = settings.get('userSize') || { dw: 0, dh: 0 };
+  const start = {
+    w: Math.max(280, VIEW_SIZES.idle.w + (u.dw || 0)),
+    h: Math.max(150, VIEW_SIZES.idle.h + (u.dh || 0))
+  };
   mainWindow = new BrowserWindow({
     width: start.w,
     height: start.h,
@@ -203,10 +201,10 @@ function createMainWindow() {
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
   mainWindow.on('move', savePosition);
   // Self-heal: if ANYTHING resizes the window while it's a pill (native quirks,
-  // stray setBounds), snap it back. Makes a broken/tiny pill state impossible.
+  // stray setBounds), snap it back to the locked measured size.
   mainWindow.on('resize', () => {
     if (currentView !== 'pill' || !mainWindow || mainWindow.isDestroyed()) return;
-    const p = timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE;
+    const p = currentPillSize || (timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE);
     const [w, h] = mainWindow.getContentSize();
     if (w !== p.w || h !== p.h) mainWindow.setContentSize(p.w, p.h);
   });
@@ -222,7 +220,7 @@ function createMainWindow() {
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
-function resizeForView(view) {
+function resizeForView(view, pillW) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   currentView = view;
   if (view !== 'pill') lastFullView = view;
@@ -230,22 +228,29 @@ function resizeForView(view) {
   const b = mainWindow.getBounds();
 
   if (view === 'pill') {
-    const p = timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE;
+    // Width comes measured from the renderer (bar's real content width). Fallback to
+    // the old constants if it's ever missing. Clamped for sanity.
+    const fallback = timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE;
+    const w = Math.round(Math.max(120, Math.min(640, pillW || fallback.w)));
+    const p = { w, h: PILL_SIZE.h };
+    currentPillSize = p;
     const x = Math.round(b.x + b.width - p.w);   // keep right edge fixed (grows leftward)
-    mainWindow.setMaximumSize(0, 0);             // unlock first (in case of pill→pill)
+    mainWindow.setMaximumSize(0, 0);             // unlock first (pill→pill re-size)
     mainWindow.setMinimumSize(p.w, p.h);
     mainWindow.setContentSize(p.w, p.h);
     mainWindow.setPosition(x, b.y);
-    // Lock min == max: native edge-resize can do nothing. NO setResizable toggling —
-    // that call is what collapsed the frameless window on Windows.
+    // Lock min == max: native edge-resize can do nothing. NO setResizable toggling.
     mainWindow.setMaximumSize(p.w, p.h);
     return;
   }
 
-  // Full views: unlock and restore normal minimums.
+  // Full views: unlock, restore minimums, apply the user's saved resize delta.
+  currentPillSize = null;
   mainWindow.setMaximumSize(0, 0);               // 0,0 = no maximum
   mainWindow.setMinimumSize(280, 150);
-  const size = VIEW_SIZES[view] || VIEW_SIZES.idle;
+  const base = VIEW_SIZES[view] || VIEW_SIZES.idle;
+  const u = settings.get('userSize') || { dw: 0, dh: 0 };
+  const size = { w: Math.max(280, base.w + (u.dw || 0)), h: Math.max(150, base.h + (u.dh || 0)) };
   const x = Math.round(b.x + b.width - size.w);  // keep right edge fixed here too
   mainWindow.setContentSize(size.w, size.h);
   mainWindow.setPosition(x, b.y);
@@ -378,17 +383,35 @@ function persistRunning() {
   settings.set('runningSession', timer.serialize());
 }
 
-async function writeSession(session) {
-  if (!session) return;
-  try {
-    await api.logSession(session.itemId, session.startedAt, session.endedAt);
-    log(`logged session item=${session.itemId} dur=${session.durationMs}ms`);
-  } catch (err) {
-    log(`logSession failed (queued): ${err.message}`);
-    const q = settings.get('retryQueue') || [];
-    q.push(session);
-    settings.set('retryQueue', q);
-    pushSyncStatus();
+// A completed session's minutes could not be added to Monday (offline, API error).
+// Keep it and retry every 2 minutes until it lands. The user is told both times.
+function queueTimeWrite(itemId, itemName, addMs) {
+  const q = settings.get('pendingTimeWrites') || [];
+  q.push({ itemId, itemName, addMs, at: Date.now() });
+  settings.set('pendingTimeWrites', q);
+  sendToast({ text: `Couldn't reach Monday — ${Math.round(addMs / 60000)}m kept locally, retrying`, durationMs: 7000 });
+  pushSyncStatus();
+}
+
+async function processTimeWrites() {
+  if (demoMode) return;
+  const q = settings.get('pendingTimeWrites') || [];
+  if (!q.length) return;
+  const remaining = [];
+  let flushedMs = 0;
+  for (const w of q) {
+    try {
+      const r = await api.addTimeSpent(w.itemId, w.addMs);
+      if (r && r.ok === false) { remaining.push(w); continue; } // column still unknown
+      flushedMs += w.addMs;
+    } catch {
+      remaining.push(w);
+    }
+  }
+  settings.set('pendingTimeWrites', remaining);
+  pushSyncStatus();
+  if (flushedMs > 0) {
+    sendToast({ text: `Caught up: ${Math.round(flushedMs / 60000)}m added to Monday`, durationMs: 5000 });
   }
 }
 
@@ -426,10 +449,21 @@ function accumulateSession(session) {
   }
   settings.setJobTimer(session.itemId, jt);
   // Add THIS session to Monday's Time Spent (reads current value + adds; never
-  // overwrites). Fire-and-forget; local totals above are the source of truth.
+  // overwrites). Local totals above are the source of truth. Failures are queued
+  // and retried — and the user is TOLD, never silent.
   if (!demoMode) {
-    api.addTimeSpent(session.itemId, session.durationMs)
-      .catch((err) => log('addTimeSpent failed: ' + err.message));
+    api.addTimeSpent(session.itemId, session.durationMs).then((r) => {
+      if (r && r.ok === false) {
+        log('addTimeSpent skipped: ' + (r.reason || 'no-column'));
+        sendToast({
+          text: 'No "Time Spent" column is set — minutes were NOT written to Monday. Open Settings.',
+          durationMs: 9000
+        });
+      }
+    }).catch((err) => {
+      log('addTimeSpent failed (queued): ' + err.message);
+      queueTimeWrite(session.itemId, session.itemName, session.durationMs);
+    });
   }
 }
 
@@ -501,8 +535,15 @@ function undoSwitch() {
 }
 
 function resumeJob(job) {
+  if (timer.isRunning()) {
+    // Defensive: something is already running — switch (which logs it) instead of
+    // overwriting the session.
+    if (timer.itemId !== job.itemId) switchAndLog({ itemId: job.itemId, itemName: job.itemName });
+    return;
+  }
   const bases = jobTimerBases(job.itemId);
   timer.start({ itemId: job.itemId, itemName: job.itemName, todayMsBase: bases.todayMsBase, totalMsBase: bases.totalMsBase });
+  settings.pushRecent(job.itemId);
   persistRunning();
   setTrayState('running');
   pushState();
@@ -549,12 +590,22 @@ function handleStartupSession() {
   const saved = settings.get('runningSession');
   if (!saved) return;
   const shown = safetyNets.morningCheckIn(saved);
-  if (!shown) {
-    // Same-day: silently continue the session.
-    timer.resume(saved);
-    setTrayState('running');
-    pushState();
+  if (shown) return;
+  // Same-day: continue the session, but subtract the time the app wasn't running
+  // (PC off / crashed / asleep with the app dead). lastSeenAt is written every tick.
+  const gap = Date.now() - (saved.lastSeenAt || Date.now());
+  if (gap > 2 * 60 * 1000) {
+    saved.subtractedMs = (saved.subtractedMs || 0) + gap;
+    const mins = Math.round(gap / 60000);
+    notify({
+      title: 'Timer adjusted',
+      body: `Removed ${mins} min while the app wasn't running (${shortName(saved.itemName)}).`
+    });
+    log(`startup gap subtracted: ${gap}ms on ${saved.itemId}`);
   }
+  timer.resume(saved);
+  setTrayState('running');
+  pushState();
 }
 
 // ---------------------------------------------------------------------------
@@ -576,21 +627,6 @@ function registerHotkeys() {
   if (toggle && !isReserved(toggle)) {
     try { globalShortcut.register(toggle, toggleWidget); } catch (e) { log('toggle hotkey failed: ' + e.message); }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Retry queue + periodic refresh
-// ---------------------------------------------------------------------------
-async function processRetryQueue() {
-  let q = settings.get('retryQueue') || [];
-  if (!q.length || demoMode) return;
-  const remaining = [];
-  for (const s of q) {
-    try { await api.logSession(s.itemId, s.startedAt, s.endedAt); }
-    catch { remaining.push(s); }
-  }
-  settings.set('retryQueue', remaining);
-  pushSyncStatus();
 }
 
 // ---------------------------------------------------------------------------
@@ -651,6 +687,49 @@ function fmt(ms) {
   return `${m}m ${s}s`;
 }
 
+// Detect the board's columns. Title matching is forgiving (case, spaces, punctuation),
+// a manual override from Settings always wins, and FAILURE IS VISIBLE (toast), not
+// just a log line — this is the coworker's "Time Spent never populates" fix.
+function detectColumns() {
+  api.getColumns().then((cols) => {
+    const norm = (t) => (t || '').toLowerCase().replace(/[^a-z]/g, '');
+
+    const ttCol = cols.find((c) => c.type === 'time_tracking');
+    if (ttCol) {
+      settings.set('timeTrackingColumnId', ttCol.id);
+      api.setCredentials({ timeTrackingColumnId: ttCol.id });
+      log(`time-tracking column: ${ttCol.id} ("${ttCol.title}")`);
+    }
+
+    const isNumbers = (c) => c.type === 'numbers' || c.type === 'numeric';
+    const manual = settings.get('timeSpentColumnManual');
+    let tsCol = manual ? cols.find((c) => c.id === manual) || null : null;
+    if (!tsCol) tsCol = cols.find((c) => isNumbers(c) && norm(c.title) === 'timespent');
+    if (!tsCol) tsCol = cols.find((c) => isNumbers(c) && norm(c.title).includes('timespent'));
+
+    if (tsCol) {
+      settings.set('timeSpentColumnId', tsCol.id);
+      settings.set('detectedTimeSpent', tsCol.title);
+      api.setCredentials({ timeSpentColumnId: tsCol.id });
+      log(`Time Spent numbers column: ${tsCol.id} ("${tsCol.title}")${manual ? ' [manual]' : ''}`);
+    } else {
+      settings.set('timeSpentColumnId', null);
+      settings.set('detectedTimeSpent', '');
+      api.setCredentials({ timeSpentColumnId: null });
+      log('Time Spent numbers column NOT found');
+      setTimeout(() => sendToast({
+        text: 'No "Time Spent" numbers column found on your board — minutes will NOT be written. Open Settings to pick one.',
+        durationMs: 10000
+      }), 3000);
+    }
+
+    const tstCol = cols.find((c) => c.type === 'text' && norm(c.title).includes('timespent'));
+    settings.set('timeSpentTextColumnId', tstCol ? tstCol.id : null);
+    api.setCredentials({ timeSpentTextColumnId: tstCol ? tstCol.id : null });
+    if (tstCol) log(`Time Spent text column: ${tstCol.id} ("${tstCol.title}")`);
+  }).catch((err) => log('column detection failed: ' + err.message));
+}
+
 // ---------------------------------------------------------------------------
 // IPC handlers
 // ---------------------------------------------------------------------------
@@ -659,7 +738,14 @@ function registerIpc() {
   ipcMain.handle('get-config', () => ({ demoMode, bannerVisible, firstRun: !settings.get('setupComplete') }));
   ipcMain.handle('get-jobs', async (_e, scope) => loadJobs(scope));
 
-  ipcMain.handle('start-job', (_e, job) => startJob({ itemId: job.itemId || job.id, itemName: job.itemName || job.name }));
+  ipcMain.handle('start-job', (_e, job) => {
+    const j = { itemId: job.itemId || job.id, itemName: job.itemName || job.name };
+    if (timer.isRunning()) {
+      if (timer.itemId === j.itemId) return appState(); // already on it — no-op
+      return switchAndLog(j); // never silently discard a running session
+    }
+    return startJob(j);
+  });
   ipcMain.handle('stop', () => stopAndLog());
   ipcMain.handle('switch-job', (_e, job) => switchAndLog({ itemId: job.itemId || job.id, itemName: job.itemName || job.name }));
   ipcMain.handle('undo-switch', () => undoSwitch());
@@ -712,7 +798,7 @@ function registerIpc() {
     }
   });
 
-  ipcMain.on('view-changed', (_e, view) => resizeForView(view));
+  ipcMain.on('view-changed', (_e, view, pillW) => resizeForView(view, pillW));
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
   ipcMain.on('quit-app', () => { app.isQuitting = true; app.quit(); });
@@ -745,7 +831,8 @@ function registerIpc() {
   ipcMain.on('resize-end', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const [w, h] = mainWindow.getContentSize();
-    settings.set('fullViewSize', { w, h });
+    const base = VIEW_SIZES[currentView] || VIEW_SIZES.idle;
+    settings.set('userSize', { dw: w - base.w, dh: h - base.h });
     resizeDrag = null;
   });
   ipcMain.on('open-settings', openSettingsWindow);
@@ -781,6 +868,22 @@ function registerIpc() {
     }
     try { return await api.getGroups(); } catch { return []; }
   });
+  ipcMain.handle('settings:get-columns', async () => {
+    const manual = settings.get('timeSpentColumnManual') || '';
+    const detected = settings.get('detectedTimeSpent') || '';
+    if (demoMode) return { ok: false, columns: [], detected, manual };
+    try {
+      const cols = await api.getColumns();
+      return {
+        ok: true,
+        columns: cols.filter((c) => c.type === 'numbers' || c.type === 'numeric'),
+        detected,
+        manual
+      };
+    } catch (err) {
+      return { ok: false, columns: [], error: err.message, detected, manual };
+    }
+  });
   ipcMain.handle('settings:save', (_e, payload) => {
     const wasDemo = demoMode;
     if (payload.apiToken !== undefined) settings.setToken(payload.apiToken);
@@ -792,9 +895,11 @@ function registerIpc() {
     if (payload.safety !== undefined) settings.set('safety', payload.safety);
     if (payload.launchOnStartup !== undefined) settings.set('launchOnStartup', payload.launchOnStartup);
     if (payload.theme !== undefined) settings.set('theme', payload.theme);
+    if (payload.timeSpentColumnManual !== undefined) settings.set('timeSpentColumnManual', payload.timeSpentColumnManual);
     settings.set('setupComplete', true);
 
     refreshMode();
+    if (!demoMode) detectColumns();
     applyThemeToWindows();
     // Switching into demo clears any real running session to avoid confusion.
     if (!wasDemo && demoMode && timer.isRunning()) {
@@ -855,44 +960,14 @@ if (!gotLock) {
       if ((settings.get('theme') || 'dark') === 'auto') applyThemeToWindows();
     });
 
-    // Auto-detect time-tracking column ID on real-mode startup.
-    if (!demoMode) {
-      api.getColumns().then((cols) => {
-        const ttCol = cols.find((c) => c.type === 'time_tracking');
-        if (ttCol) {
-          settings.set('timeTrackingColumnId', ttCol.id);
-          api.setCredentials({ timeTrackingColumnId: ttCol.id });
-          log(`auto-detected time-tracking column: ${ttCol.id} ("${ttCol.title}")`);
-        }
-        // "Time Spent" NUMBERS column (ignore the text "Times" column beside it).
-        const tsCol = cols.find((c) =>
-          (c.type === 'numbers' || c.type === 'numeric') && /^\s*time\s*spent\s*$/i.test(c.title)
-        );
-        if (tsCol) {
-          settings.set('timeSpentColumnId', tsCol.id);
-          api.setCredentials({ timeSpentColumnId: tsCol.id });
-          log(`auto-detected Time Spent numbers column: ${tsCol.id} ("${tsCol.title}")`);
-        } else {
-          log('Time Spent numbers column not found — will post comments as fallback');
-        }
-        // "Time Spent" TEXT column (formatted display, e.g. "7h 10m 0s").
-        const tstCol = cols.find((c) =>
-          c.type === 'text' && /^\s*time\s*spent\s*$/i.test(c.title)
-        );
-        if (tstCol) {
-          settings.set('timeSpentTextColumnId', tstCol.id);
-          api.setCredentials({ timeSpentTextColumnId: tstCol.id });
-          log(`auto-detected Time Spent text column: ${tstCol.id} ("${tstCol.title}")`);
-        }
-      }).catch((err) => log('column detection failed: ' + err.message));
+    if (!demoMode) detectColumns();
 
-      // Clear any retry-queue entries that were created before the column ID was known.
-      const q = settings.get('retryQueue') || [];
-      if (q.length) {
-        log(`clearing ${q.length} stuck retry-queue entry(s) from before column detection`);
-        settings.set('retryQueue', []);
-        pushSyncStatus();
-      }
+    // Clear any retry-queue entries that were created before the column ID was known.
+    const q = settings.get('retryQueue') || [];
+    if (q.length) {
+      log(`clearing ${q.length} stuck retry-queue entry(s) from before column detection`);
+      settings.set('retryQueue', []);
+      pushSyncStatus();
     }
 
     handleStartupSession();
@@ -902,7 +977,8 @@ if (!gotLock) {
     pushJobs();
 
     // Periodic: retry queue + jobs/today refresh.
-    setInterval(processRetryQueue, 2 * 60 * 1000);
+    setInterval(processTimeWrites, 2 * 60 * 1000);
+    setTimeout(processTimeWrites, 30 * 1000); // early catch-up pass after launch
     setInterval(() => { if (mainWindow && mainWindow.isVisible()) pushJobs(); }, 5 * 60 * 1000);
 
     // Show on launch unless started hidden at OS login (or running the smoke test).
@@ -1007,13 +1083,13 @@ function runSmokeTest() {
     try {
       add('appState demoMode', appState().demoMode === true);
       const jobs = await loadJobs('mine');
-      add('loadJobs returns 11 mine', jobs.recent.length + jobs.all.length === 11);
+      add('loadJobs returns all 12', jobs.all.length === 12);
 
       // Round-trip through the preload bridge + ipcMain handlers from the renderer.
       const rtState = await mainWindow.webContents.executeJavaScript('window.timerAPI.getState()');
       add('renderer getState round-trip', rtState && rtState.demoMode === true);
       const rtJobs = await mainWindow.webContents.executeJavaScript("window.timerAPI.getJobs('mine')");
-      add('renderer getJobs round-trip', rtJobs.recent.length + rtJobs.all.length === 11);
+      add('renderer getJobs round-trip', rtJobs.all.length === 12);
 
       // Real start → switch → stop coordination.
       startJob({ itemId: '1', itemName: 'Smoke - 111122' });

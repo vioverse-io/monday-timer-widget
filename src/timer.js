@@ -61,7 +61,8 @@ class TimerEngine extends EventEmitter {
       startedAt: this.startedAt,
       todayMsBase: this.todayMsBase,
       totalMsBase: this.totalMsBase,
-      subtractedMs: this.subtractedMs
+      subtractedMs: this.subtractedMs,
+      lastSeenAt: Date.now()   // persisted every tick; used to subtract off-time on relaunch
     };
   }
 
