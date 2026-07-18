@@ -14,7 +14,7 @@
         longSession: { enabled: true, hours: 4 },
         morningCheckin: { enabled: true }
       },
-      launchOnStartup: false, closeToTray: true, theme: 'dark', demoMode: true
+      launchOnStartup: false, closeToTray: true, theme: 'light', demoMode: true
     }),
     save: (p) => { console.log('save', p); return Promise.resolve({ ok: true }); },
     test: () => Promise.resolve({ ok: false, error: 'Electron only' }),
@@ -94,8 +94,8 @@
     $('startup-on').checked = !!s.launchOnStartup;
     $('tray-on').checked = s.closeToTray !== false; // default on
 
-    $('theme').value = s.theme || 'dark';
-    applyTheme(s.theme || 'dark');
+    $('theme').value = s.theme || 'light';
+    applyTheme(s.theme || 'light');
 
     // Time Spent column picker (real mode only; demo returns none).
     if (api.getColumns) {

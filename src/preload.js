@@ -26,7 +26,7 @@ contextBridge.exposeInMainWorld('timerAPI', {
   setElapsed: (ms) => ipcRenderer.invoke('set-elapsed', { ms }),
   adjustLastSession: (itemId, ms) => ipcRenderer.invoke('adjust-last-session', { itemId, ms }),
   getExportInfo: (itemId) => ipcRenderer.invoke('get-export-info', itemId),
-  logTime: (itemId, note, mentionId) => ipcRenderer.invoke('log-time', { itemId, note, mentionId }),
+  logTime: (itemId, note, mentionIds) => ipcRenderer.invoke('log-time', { itemId, note, mentionIds }),
 
   // ---- fire-and-forget ----
   viewChanged: (view, pillW) => ipcRenderer.send('view-changed', view, pillW),

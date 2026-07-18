@@ -46,17 +46,22 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
    user is toasted). Never make a write path silent.
 
 ## Status
-- **v2.4.2** on `main`. All of HANDOFF-5/6/7/8 applied (see `production/`).
+- **v2.6.0** on `main`. HANDOFF-5 through HANDOFF-14 applied (see `production/`).
 - Window/pill model: one frameless window. Full views auto-size via `VIEW_SIZES`
   (idle 340×392, running 340×324, picker 340×480). Minimize = pill (48px bar):
   the renderer measures the bar's true content width (`width: max-content` +
   ResizeObserver → `viewChanged('pill', w)`), main sizes the window to match, keeps
   the RIGHT edge pinned, and locks min==max so native edge-resize is inert; a
-  self-heal `resize` handler snaps back any stray resize. First show waits for
-  `ready-to-show` (no launch flash).
+  self-heal `resize` handler snaps back any stray resize (suppressed during
+  grab-drag to prevent oscillation). First show waits for `ready-to-show`
+  (no launch flash).
 - Pill (running): grabber ⠿ drag-to-move · dot · number chip · m:ss clock (ticks every
   second) · today chip · −5/−15 · comment · stop · expand. Pill (stopped): number chip +
-  Resume + Switch + expand. Esc, double-click, or clicking the info area expands.
+  Resume + Switch + expand. Esc, double-click, or clicking the info area expands
+  to the stopped-summary view (big number + Play + Switch + Comment), not the
+  idle recents. Double-clicking the job number in the pill does NOT expand (guarded).
+- Stop → clock resets to 0:00, sub reads "Saved to Monday", button becomes Play
+  (restart same job). −5/−15 still available post-stop but clock stays 0:00.
 - Sessions can't be silently lost: start-while-running switches (logs the old session);
   stale post-stop "Play" state clears when any timer starts; same-day relaunch subtracts
   the time the app wasn't running (`lastSeenAt` gap, >2 min, with a notification);
@@ -64,13 +69,17 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
 - Monday: additive `addTimeSpent` on stop/switch; failures queue + toast; catch-up toast
   when flushed. Column detection is forgiving (normalized title match), a manual
   override lives in Settings (with detected-column status line), failure is toasted.
-  Comments (`create_update`) only when the user types a note. API version 2026-01,
-  `items_page(limit: 500)`.
+  Comments (`create_update`) only when the user types a note; multi-select mention
+  chips post an array of user ids. API version 2026-01, `items_page(limit: 500)`.
 - Picker: group pills scope browsing; typing searches the WHOLE board (results colored
-  by their own group). Recents capped at 4. Expand from pill returns to the picker if
-  that's where you were.
+  by their own group). Recents capped at 4. Job list follows board order (no due-date
+  re-sort).
 - Settings: hotkey recorder requires a modifier (Ctrl/Alt/Win); Time Spent column
-  picker with auto-detect status; theme dark/light/auto.
+  picker with auto-detect status; theme dark/light/auto (default = Monday-light).
+  Close-to-tray on by default. Manual clock editing (increase-only).
+- Theme: default is light (Monday-neutral palette: airy white + cool grays). Dark
+  theme is neutral graphite (no warm/gold cast). Shadows are soft gray, not pink.
+  Demo mode label hidden (no longer offered in the UI).
 - Electron pinned exactly (42.2.0) — "latest" caused user/coworker version drift.
 
 ## How to verify changes (no Monday token needed)
@@ -101,9 +110,9 @@ Never hand out an installer until the fixes it contains are user-tested and push
   pointer-drag (move-start/move-to/move-end, resize-start/to/end), not app-region.
 - Resize grip uses absolute deltas + atomic `setBounds()` (no feedback loop).
 - API token encrypted via `safeStorage`. Logs in `userData/logs` (weekly rotation).
-- Jobs sorted by due date; job numbers extracted by `jobNum()` (3–7 digits, several
-  name shapes). "Today" clips to the local day (display-side handles past-midnight
-  sessions).
+- Jobs follow board order (no client-side re-sort); job numbers extracted by `jobNum()`
+  (3–7 digits, several name shapes). "Today" clips to the local day (display-side
+  handles past-midnight sessions).
 - The user is a designer, not a coder: plain English, short answers, walk through test
   checklists one item at a time. Handoffs from Claude Design arrive as
   `production/HANDOFF-N-*.md` — apply them EXACTLY as written; if an anchor doesn't

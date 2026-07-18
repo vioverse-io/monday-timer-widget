@@ -38,6 +38,7 @@ let undoTimer = null;
 let lastFullView = 'idle';
 let currentView = 'idle';
 let currentPillSize = null;  // {w,h} the pill window is currently locked to (measured)
+let moveDrag = null;         // drag origin during pill move (suppresses resize/reposition)
 
 // ---------------------------------------------------------------------------
 // Logging (weekly-rotated file in userData/logs)
@@ -95,12 +96,12 @@ function refreshMode() {
 // ---------------------------------------------------------------------------
 // Effective theme: 'dark' | 'light' (resolving 'auto' against the OS).
 function effectiveTheme() {
-  const t = settings.get('theme') || 'dark';
+  const t = settings.get('theme') || 'light';
   if (t === 'auto') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   return t;
 }
 function themeBg(theme) {
-  return theme === 'light' ? '#F5F1EB' : '#1E1B17';
+  return theme === 'light' ? '#F6F7FB' : '#24262B';
 }
 function applyThemeToWindows() {
   const bg = themeBg(effectiveTheme());
@@ -204,8 +205,11 @@ function createMainWindow() {
   mainWindow.on('move', savePosition);
   // Self-heal: if ANYTHING resizes the window while it's a pill (native quirks,
   // stray setBounds), snap it back to the locked measured size.
+  // Suppressed during a grab-drag — setPosition can trigger spurious resize events
+  // on Windows, and the right-edge-pin in resizeForView fights the drag position.
   mainWindow.on('resize', () => {
     if (currentView !== 'pill' || !mainWindow || mainWindow.isDestroyed()) return;
+    if (moveDrag) return;
     const p = currentPillSize || (timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE);
     const [w, h] = mainWindow.getContentSize();
     if (w !== p.w || h !== p.h) mainWindow.setContentSize(p.w, p.h);
@@ -348,13 +352,10 @@ async function loadJobs(scope = 'all') {
     const groupIds = groups.map((g) => g.id);
     const all = await api.getItems(groupIds, currentUser.id);
 
-    // Sort by due date (earliest first), items with no date go to the end.
-    const sorted = [...all].sort((a, b) => {
-      const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-      const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-      if (da !== db) return da - db;
-      return a.name.localeCompare(b.name);
-    });
+    // Mirror the board's own order. getItems fetches groups in board order and their items
+    // in board position (Monday's items_page returns board order when no column sort is
+    // requested). NO due-date re-sort — the "Select a job" list matches the board.
+    const sorted = [...all];
 
     const byId = {};
     for (const j of all) byId[j.id] = j;
@@ -810,9 +811,9 @@ function registerIpc() {
 
   // "Comment to Monday" — posts a note only. Does NOT write the Time Spent number
   // (that happens additively on Stop) and does NOT reset the timer or local totals.
-  ipcMain.handle('log-time', async (_e, { itemId, note, mentionId }) => {
+  ipcMain.handle('log-time', async (_e, { itemId, note, mentionIds }) => {
     const trimmed = (note || '').trim();
-    const mentions = mentionId ? [mentionId] : [];
+    const mentions = Array.isArray(mentionIds) ? mentionIds.filter(Boolean) : [];
     if (!trimmed && !mentions.length) return { ok: true }; // nothing to post
     try {
       const r = await api.logExport(itemId, 0, 0, 0, trimmed, mentions);
@@ -824,7 +825,10 @@ function registerIpc() {
     }
   });
 
-  ipcMain.on('view-changed', (_e, view, pillW) => resizeForView(view, pillW));
+  ipcMain.on('view-changed', (_e, view, pillW) => {
+    if (moveDrag) return; // don't reposition during pill drag
+    resizeForView(view, pillW);
+  });
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
   ipcMain.on('quit-app', () => { app.isQuitting = true; app.quit(); });
@@ -839,7 +843,7 @@ function registerIpc() {
     }
   });
   // Pill move: capture origin on start, apply absolute delta each move. No feedback loop.
-  let moveDrag = null;
+  // moveDrag is declared at module scope so the resize self-heal can check it.
   ipcMain.on('move-start', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const b = mainWindow.getBounds();
@@ -990,7 +994,7 @@ if (!gotLock) {
 
     // Follow the OS light/dark setting when theme is 'auto'.
     nativeTheme.on('updated', () => {
-      if ((settings.get('theme') || 'dark') === 'auto') applyThemeToWindows();
+      if ((settings.get('theme') || 'light') === 'auto') applyThemeToWindows();
     });
 
     if (!demoMode) detectColumns();

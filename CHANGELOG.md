@@ -1,5 +1,43 @@
 # Changelog
 
+## v2.6.0
+- **Visual refresh**: Monday-like neutral light palette (now the default theme);
+  neutral graphite dark theme (no warm/gold cast). Soft gray shadows throughout
+  (were pink/coral).
+- **Stop → 0:00**: clock resets on stop, sub reads "Saved to Monday", button becomes
+  Play (restart same job). −5/−15 still available post-stop; clock stays 0:00.
+- **Multi-select mention chips**: the person picker in the Comment modal is now a row
+  of toggle-able chips; multiple teammates can be @mentioned in one post.
+- **Board order**: the "Select a job" list mirrors the Monday board's own item order
+  instead of re-sorting by due date.
+- **Outlined Comment button**: "Comment to Monday" on the big screen is a red outline
+  button with white fill and the message-circle icon (matches the pill).
+- **Flipped logo mark**: the timing-arc SVG is rotated 180°.
+- **Resume pill expand fix**: clicking the dot, info area, or expand button on the
+  resume pill now opens the stopped-summary view (big number + Play + Switch +
+  Comment), not the idle recents list. The pill-stop handler now saves the stopped
+  session so expand works from every path (pill stop, big-screen stop, app restart).
+- **Idle recents chips**: non-first rows show white chip + gray text; hover restores
+  red chip styling.
+- **HANDOFF-13 double-click guard**: double-clicking the job number in the pill bar
+  no longer expands (both click and dblclick are stopped).
+- Demo mode label hidden (`display: none`).
+- Default theme changed from dark to light across main, settings, and settings window.
+
+## v2.5.0
+- **Close-to-tray**: the X button hides to the system tray (keeps running) instead of
+  quitting. Configurable in Settings (on by default).
+- **@mention in comments**: single-select dropdown to notify a teammate when posting a
+  comment to Monday.
+- **Manual clock editing**: click the big elapsed clock to type a new (larger) time.
+  Increase-only — tracked time can never be reduced via the clock.
+
+## v2.4.4
+- Time Spent text column now preserves seconds (`Xh Xm Xs` format).
+
+## v2.4.3
+- Pill/picker UX fixes (HANDOFF-9).
+
 ## v2.4.2
 - Minimize no longer flashes a full-height bar before the window snaps down (fixed 48px bar).
 - Launch no longer flashes an oversized/white frame (window shows only when ready to paint).

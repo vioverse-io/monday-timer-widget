@@ -38,8 +38,8 @@ const defaults = {
   // Close button hides to the system tray (keeps running) instead of quitting.
   closeToTray: true,
 
-  // Appearance: 'dark' | 'light' | 'auto' (follow Windows)
-  theme: 'dark',
+  // Appearance: 'dark' | 'light' | 'auto' (follow Windows). Default = Monday-light.
+  theme: 'light',
 
   // Window position memory ({x, y} or null for default)
   windowPosition: null,

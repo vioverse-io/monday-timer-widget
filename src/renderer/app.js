@@ -122,6 +122,8 @@
       ? 'SELECT A JOB'
       : state.running
       ? 'TRACKING'
+      : stoppedSession
+      ? 'STOPPED'
       : 'NO TIMER';
 
     if (name !== 'pill') prevFullView = name;
@@ -542,8 +544,8 @@
       `Post a comment on this job to Monday.`;
     const noteInput = $('confirm-export-note');
     noteInput.value = '';
-    const mentionSel = $('confirm-export-mention');
-    if (mentionSel) mentionSel.value = '';
+    const mentionWrap = $('mention-chips');
+    if (mentionWrap) mentionWrap.querySelectorAll('.mention-chip').forEach((c) => c.classList.remove('selected'));
     $('confirm-export').classList.remove('hidden');
     setTimeout(() => noteInput.focus(), 30);
     // Wire up confirm/cancel (one-shot)
@@ -557,9 +559,9 @@
     };
     const doConfirm = async () => {
       const note = noteInput.value.trim();
-      const mentionId = mentionSel ? mentionSel.value : '';
+      const mentionIds = mentionWrap ? Array.from(mentionWrap.querySelectorAll('.mention-chip.selected')).map((c) => c.dataset.uid) : [];
       cleanup();
-      const result = await api.logTime(itemId, note, mentionId || null);
+      const result = await api.logTime(itemId, note, mentionIds);
       if (result.ok) {
         showToast({
           text: result.mentionSkipped ? "Comment posted (couldn't add the mention)" : 'Comment posted to Monday',
@@ -602,9 +604,9 @@
   function showStoppedSummary(itemId, itemName, elapsedMs) {
     stoppedSession = { itemId, itemName, elapsedMs };
     renderJob(itemName);
-    $('elapsed').textContent = fmtClock(elapsedMs);
+    $('elapsed').textContent = '0:00';
     $('today').textContent = '';
-    $('total').textContent = 'Session saved';
+    $('total').textContent = 'Saved to Monday';
     $('topbar-label').textContent = 'STOPPED';
     setDot(false);
     $('status-dot').className = 'dot dot-red';
@@ -628,13 +630,14 @@
     clearStoppedSession();
     setDot(false);
     setView('idle');
+    renderIdleRecents();
   }
 
   function adjustStoppedSession(ms, label) {
     if (!stoppedSession) return;
     api.adjustLastSession(stoppedSession.itemId, ms);
     stoppedSession.elapsedMs = Math.max(0, stoppedSession.elapsedMs - ms);
-    $('elapsed').textContent = fmtClock(stoppedSession.elapsedMs);
+    $('elapsed').textContent = '0:00';
     // Visual feedback (same as live subtract)
     const el = $('elapsed');
     el.classList.add('elapsed-flash');
@@ -744,7 +747,12 @@
     const info = $('pill-info');
     // Expand always returns to the full app, never the job list. Running → tracking
     // view; otherwise the idle screen. (Reverses the old "return to picker" behaviour.)
-    const expandPill = () => setView(state.running ? 'running' : 'idle');
+    const expandPill = () => {
+      if (state.running || stoppedSession) { setView('running'); return; }
+      const resume = resumeTarget();
+      if (resume) { showStoppedSummary(resume.id, resume.name, 0); setView('running'); }
+      else setView('idle');
+    };
     let drag = null;
 
     grab.addEventListener('pointerdown', (e) => {
@@ -760,8 +768,11 @@
     grab.addEventListener('pointerup', () => { if (drag) api.moveEnd(); drag = null; });
 
     info.addEventListener('click', expandPill);
-    // The Job ID# is informational only — clicking it must NOT expand (stay in the bar).
+    // The Job ID# is informational only — it must NOT expand (stay in the bar). Guard BOTH
+    // click AND dblclick: the bar has a dblclick→expand escape hatch below, so a double-tap
+    // on the number would otherwise slip past the single-click guard and expand.
     $('pill-number').addEventListener('click', (e) => e.stopPropagation());
+    $('pill-number').addEventListener('dblclick', (e) => e.stopPropagation());
     // Escape hatches: double-click anywhere on the bar, or press Esc.
     $('view-pill').addEventListener('dblclick', expandPill);
     document.addEventListener('keydown', (e) => {
@@ -771,9 +782,13 @@
     const onBtn = (fn) => (e) => { e.stopPropagation(); fn(e); };
     $('pill-stop').addEventListener('click', onBtn(async () => {
       const itemId = state.itemId;
+      const itemName = state.itemName;
+      const elapsed = Math.max(0, Date.now() - state.startedAt - (state.subtractedMs || 0));
+      stoppedSession = { itemId, itemName, elapsedMs: elapsed };
+      lastStoppedItemId = itemId;
       const s = await api.stop();
       applyAfterAction(s);
-      lastStoppedItemId = itemId;
+      showStoppedSummary(itemId, itemName, elapsed);
       renderPill();
       sendPillSize();
     }));
@@ -884,6 +899,11 @@
     $('log-btn').addEventListener('click', () => {
       const id = stoppedSession ? stoppedSession.itemId : state.itemId;
       if (id) doLogTime(id);
+    });
+
+    // Mention chips (multi-select) in the comment modal — tap to toggle each person.
+    document.querySelectorAll('#mention-chips .mention-chip').forEach((chip) => {
+      chip.addEventListener('click', () => chip.classList.toggle('selected'));
     });
 
     // Refresh jobs

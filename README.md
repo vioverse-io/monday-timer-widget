@@ -15,17 +15,22 @@ visible toasts. Comments (`create_update`) are posted only when the user types a
 
 ## Status
 
-- **v2.4.2.** Demo mode and real Monday mode are both working.
+- **v2.6.0.** Real Monday mode and demo mode both working.
 - One window, four states: idle / running / picker at fixed per-view sizes, plus a
   48px minimized bar whose window wraps its measured content exactly (right edge
   pinned). Grabber ⠿ moves it; Esc / double-click / info-click expands it.
-- Stopped bar: job number + Resume + Switch + expand.
+- Stopped bar: job number + Resume + Switch + expand (expands to the stopped-summary
+  view with Play / Switch / Comment to Monday).
+- Stop resets clock to 0:00 with "Saved to Monday"; Play restarts the same job.
 - Sessions can't be lost: starting over a running timer switches (and logs) instead of
   discarding; same-day relaunch subtracts the time the machine was off; different-day
   relaunch asks (morning check-in).
 - Settings: Monday token/board, Time Spent column picker with auto-detect status,
-  hotkeys (modifier required), safety nets, theme, launch-on-startup.
+  hotkeys (modifier required), safety nets, theme (default = Monday-light),
+  close-to-tray, launch-on-startup. Manual clock editing (increase-only).
 - Picker: group pills to browse, search spans the whole board, 4 recents on idle.
+  Job list follows board order (no due-date re-sort).
+- Comments support multi-select mention chips (tap to toggle teammates).
 
 ## Run it
 

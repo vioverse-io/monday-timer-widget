@@ -1,6 +1,6 @@
 {
   "name": "compumail-timer",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Floating always-on-top desktop widget that tracks time locally and logs completed sessions to a Monday.com board.",
   "main": "src/main.js",
   "author": "Compu-Mail LLC",
