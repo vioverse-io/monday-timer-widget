@@ -554,7 +554,6 @@ textarea.search {
   opacity: 0;
   transition: opacity 0.15s;
 }
-.job-row:hover .job-row-play-pill { opacity: 1; }
 .job-row.active { background: var(--bg-secondary); box-shadow: var(--card-shadow); }
 .job-row.active .job-row-name { font-weight: 700; }
 .job-row.active .job-row-num { color: var(--chip-fg); }
@@ -603,7 +602,6 @@ textarea.search {
   padding: 0;
   opacity: 0;
 }
-.job-row:hover .job-row-export { opacity: 1; }
 .job-row.active .job-row-export { opacity: 1; }
 .job-row-export svg { pointer-events: none; }
 .job-row-export:hover { border-color: var(--accent-red); color: var(--accent-red); background: var(--chip-bg); }

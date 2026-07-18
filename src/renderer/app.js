@@ -118,7 +118,7 @@
     $('back-btn').classList.toggle('hidden', !isPicker);
     $('status-dot').classList.toggle('hidden', isPicker);
     $('topbar-label').textContent = isPicker
-      ? 'PICK A JOB'
+      ? 'SELECT A JOB'
       : state.running
       ? 'TRACKING'
       : 'NO TIMER';
@@ -210,7 +210,7 @@
       setView(s.running ? 'running' : 'idle');
     } else {
       $('topbar-label').textContent =
-        view === 'picker' ? 'PICK A JOB' : s.running ? 'TRACKING'
+        view === 'picker' ? 'SELECT A JOB' : s.running ? 'TRACKING'
         : stoppedSession ? 'STOPPED' : 'NO TIMER';
     }
 
@@ -660,7 +660,9 @@
   function bindPill() {
     const grab = $('pill-grab');
     const info = $('pill-info');
-    const expandPill = () => setView(prevFullView === 'picker' ? 'picker' : (state.running ? 'running' : 'idle'));
+    // Expand always returns to the full app, never the job list. Running → tracking
+    // view; otherwise the idle screen. (Reverses the old "return to picker" behaviour.)
+    const expandPill = () => setView(state.running ? 'running' : 'idle');
     let drag = null;
 
     grab.addEventListener('pointerdown', (e) => {
@@ -676,6 +678,8 @@
     grab.addEventListener('pointerup', () => { if (drag) api.moveEnd(); drag = null; });
 
     info.addEventListener('click', expandPill);
+    // The Job ID# is informational only — clicking it must NOT expand (stay in the bar).
+    $('pill-number').addEventListener('click', (e) => e.stopPropagation());
     // Escape hatches: double-click anywhere on the bar, or press Esc.
     $('view-pill').addEventListener('dblclick', expandPill);
     document.addEventListener('keydown', (e) => {
