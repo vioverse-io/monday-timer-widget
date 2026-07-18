@@ -153,6 +153,19 @@ class TimerEngine extends EventEmitter {
     return this.getState();
   }
 
+  /**
+   * Manually SET the running session's elapsed time to an absolute value (ms) — the
+   * "edit the clock" feature. Recomputes startedAt so the live clock continues from the
+   * new value and clears any subtracted time. Increase-only is enforced by the caller.
+   */
+  setElapsed(ms) {
+    if (!this.running) return this.getState();
+    this.startedAt = Date.now() - Math.max(0, ms);
+    this.subtractedMs = 0;
+    this.emit('change', this.getState());
+    return this.getState();
+  }
+
   /** Restore a persisted running session (same-day resume after restart). */
   resume(session) {
     if (!session) return null;

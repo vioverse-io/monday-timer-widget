@@ -19,6 +19,7 @@
   let lastStoppedItemId = null; // highlights the last-stopped job in the picker
   let pillRunning = null; // running-state the pill window is currently sized for
   let lastPillTimeLen = 0; // re-measure the pill when the clock gains a digit
+  let editingElapsed = false; // true while the user is hand-editing the big clock
 
   // ---- formatters ----
   const pad = (n) => String(n).padStart(2, '0');
@@ -169,7 +170,7 @@
     const today = base + sinceMidnight;
     // Total = unexported delta (not lifetime)
     const total = (state.totalMsBase || 0) + elapsed;
-    $('elapsed').textContent = fmtClock(elapsed);
+    if (!editingElapsed) $('elapsed').textContent = fmtClock(elapsed);
     $('today').innerHTML = 'Today <strong>' + fmtToday(today) + '</strong>';
     $('total').innerHTML = 'Total <strong>' + fmtToday(total) + '</strong>';
     const pillClock = fmtClock(elapsed);
@@ -186,6 +187,81 @@
     const tf = $('track-fill'), tk = $('track-knob');
     if (tf) tf.style.width = pct + '%';
     if (tk) tk.style.left = pct + '%';
+  }
+
+  // ---- manual clock edit (increase-only) ----
+  function parseClockInput(str) {
+    const s = String(str || '').trim().toLowerCase();
+    if (!s) return null;
+    if (/[hms]/.test(s)) {
+      const h = /(\d+)\s*h/.exec(s), m = /(\d+)\s*m/.exec(s), se = /(\d+)\s*s/.exec(s);
+      if (!h && !m && !se) return null;
+      return ((h ? +h[1] : 0) * 3600 + (m ? +m[1] : 0) * 60 + (se ? +se[1] : 0)) * 1000;
+    }
+    if (s.includes(':')) {
+      const parts = s.split(':').map((p) => parseInt(p, 10));
+      if (parts.some((n) => isNaN(n))) return null;
+      let sec;
+      if (parts.length === 3) sec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      else if (parts.length === 2) sec = parts[0] * 60 + parts[1];
+      else sec = parts[0] * 60;
+      return sec * 1000;
+    }
+    const n = parseInt(s, 10);
+    return isNaN(n) ? null : n * 60 * 1000; // bare number = minutes
+  }
+
+  function beginEditElapsed() {
+    if (!state.running || stoppedSession || editingElapsed) return;
+    const el = $('elapsed');
+    if (!el) return;
+    editingElapsed = true;
+    const current = Math.max(0, Date.now() - state.startedAt - (state.subtractedMs || 0));
+    const cs = getComputedStyle(el);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'no-drag';
+    input.value = fmtClock(current);
+    input.style.font = cs.font;
+    input.style.color = 'inherit';
+    input.style.width = '7ch';
+    input.style.textAlign = 'center';
+    input.style.background = 'transparent';
+    input.style.border = '1px solid var(--border)';
+    input.style.borderRadius = '6px';
+    input.style.padding = '0 4px';
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = async (commit) => {
+      if (done) return;
+      done = true;
+      editingElapsed = false;
+      const targetMs = commit ? parseClockInput(input.value) : null;
+      const span = document.createElement('span');
+      span.id = 'elapsed';
+      span.className = 'elapsed';
+      span.title = 'Click to edit — time can only go up';
+      span.style.cursor = 'pointer';
+      span.addEventListener('click', beginEditElapsed);
+      input.replaceWith(span);
+      if (commit && targetMs != null) {
+        const res = await api.setElapsed(targetMs);
+        if (res && res.changed) {
+          state.startedAt = Date.now() - res.elapsedMs; // optimistic; pushState confirms
+          state.subtractedMs = 0;
+        } else if (res && res.changed === false && targetMs <= current) {
+          showToast({ text: 'Manual time can only go up — tracked minutes are never removed.', durationMs: 4000 });
+        }
+      }
+      renderTime();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
   }
 
   // ---- state ----
@@ -466,6 +542,8 @@
       `Post a comment on this job to Monday.`;
     const noteInput = $('confirm-export-note');
     noteInput.value = '';
+    const mentionSel = $('confirm-export-mention');
+    if (mentionSel) mentionSel.value = '';
     $('confirm-export').classList.remove('hidden');
     setTimeout(() => noteInput.focus(), 30);
     // Wire up confirm/cancel (one-shot)
@@ -479,10 +557,14 @@
     };
     const doConfirm = async () => {
       const note = noteInput.value.trim();
+      const mentionId = mentionSel ? mentionSel.value : '';
       cleanup();
-      const result = await api.logTime(itemId, note);
+      const result = await api.logTime(itemId, note, mentionId || null);
       if (result.ok) {
-        showToast({ text: 'Comment posted to Monday', durationMs: 4000 });
+        showToast({
+          text: result.mentionSkipped ? "Comment posted (couldn't add the mention)" : 'Comment posted to Monday',
+          durationMs: 4000
+        });
       } else {
         showToast({ text: 'Comment failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
       }
@@ -750,7 +832,7 @@
   function bind() {
     $('settings-btn').addEventListener('click', () => api.openSettings());
     $('min-btn').addEventListener('click', () => setView('pill'));
-    $('close-btn').addEventListener('click', () => api.quitApp());
+    $('close-btn').addEventListener('click', () => api.closeRequest());
     $('back-btn').addEventListener('click', closePicker);
 
     $('start-job-btn').addEventListener('click', () => openPicker('start'));
@@ -806,6 +888,14 @@
 
     // Refresh jobs
     $('refresh-btn').addEventListener('click', () => refreshJobs());
+
+    // Manual clock edit: click the big elapsed clock to type a new (larger) time.
+    const elapsedEl = $('elapsed');
+    if (elapsedEl) {
+      elapsedEl.title = 'Click to edit — time can only go up';
+      elapsedEl.style.cursor = 'pointer';
+      elapsedEl.addEventListener('click', beginEditElapsed);
+    }
 
     bindPill();
     bindResizeGrip();

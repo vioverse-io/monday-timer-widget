@@ -214,8 +214,16 @@ function createMainWindow() {
   mainWindow.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) log('renderer: ' + message);
   });
-  mainWindow.on('close', () => {
-    // X = quit. Close settings window too.
+  mainWindow.on('close', (e) => {
+    // Close-to-tray (default on): unless we're really quitting (tray Quit / before-quit),
+    // hide to the tray and keep running instead of exiting.
+    if (settings.get('closeToTray') !== false && !app.isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+      if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.hide();
+      return;
+    }
+    // Real quit path.
     if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
     app.isQuitting = true;
   });
@@ -771,6 +779,21 @@ function registerIpc() {
     return s;
   });
 
+  // Manually set the running clock (edit-the-clock). INCREASE-ONLY: a value at or below
+  // the current elapsed is ignored, so tracked time can never be erased. The bumped time
+  // rides to Monday additively on the next Stop (no separate write here).
+  ipcMain.handle('set-elapsed', (_e, { ms }) => {
+    if (!timer.isRunning()) return { changed: false };
+    const target = Math.max(0, Math.round(ms || 0));
+    const current = timer.getElapsed();
+    if (target <= current) return { changed: false, elapsedMs: current };
+    timer.setElapsed(target);
+    persistRunning();
+    pushState();
+    log(`set-elapsed item=${timer.itemId} ${current}ms -> ${target}ms`);
+    return { changed: true, elapsedMs: target };
+  });
+
   ipcMain.handle('get-export-info', (_e, itemId) => {
     const jt = settings.getJobTimer(itemId);
     let runningMs = 0;
@@ -787,13 +810,14 @@ function registerIpc() {
 
   // "Comment to Monday" — posts a note only. Does NOT write the Time Spent number
   // (that happens additively on Stop) and does NOT reset the timer or local totals.
-  ipcMain.handle('log-time', async (_e, { itemId, note }) => {
+  ipcMain.handle('log-time', async (_e, { itemId, note, mentionId }) => {
     const trimmed = (note || '').trim();
-    if (!trimmed) return { ok: true }; // nothing to post
+    const mentions = mentionId ? [mentionId] : [];
+    if (!trimmed && !mentions.length) return { ok: true }; // nothing to post
     try {
-      await api.logExport(itemId, 0, 0, 0, trimmed);
-      log(`comment item=${itemId}`);
-      return { ok: true };
+      const r = await api.logExport(itemId, 0, 0, 0, trimmed, mentions);
+      log(`comment item=${itemId}${mentions.length ? ' mention=' + mentions.join(',') : ''}${r && r.mentionSkipped ? ' (mention skipped)' : ''}`);
+      return { ok: true, mentionSkipped: !!(r && r.mentionSkipped) };
     } catch (err) {
       log(`comment failed: ${err.message}`);
       return { ok: false, error: err.message || 'Comment failed.' };
@@ -804,6 +828,16 @@ function registerIpc() {
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
   ipcMain.on('quit-app', () => { app.isQuitting = true; app.quit(); });
+  // The widget's own X button: hide to tray when close-to-tray is on, else quit.
+  ipcMain.on('close-request', () => {
+    if (settings.get('closeToTray') !== false) {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+      if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.hide();
+    } else {
+      app.isQuitting = true;
+      app.quit();
+    }
+  });
   // Pill move: capture origin on start, apply absolute delta each move. No feedback loop.
   let moveDrag = null;
   ipcMain.on('move-start', () => {
@@ -852,6 +886,7 @@ function registerIpc() {
       hotkeyToggle: all.hotkeyToggle,
       safety: all.safety,
       launchOnStartup: all.launchOnStartup,
+      closeToTray: all.closeToTray !== false,
       theme: all.theme || 'dark',
       demoMode
     };
@@ -890,6 +925,7 @@ function registerIpc() {
     if (payload.hotkeyToggle !== undefined) settings.set('hotkeyToggle', payload.hotkeyToggle);
     if (payload.safety !== undefined) settings.set('safety', payload.safety);
     if (payload.launchOnStartup !== undefined) settings.set('launchOnStartup', payload.launchOnStartup);
+    if (payload.closeToTray !== undefined) settings.set('closeToTray', payload.closeToTray);
     if (payload.theme !== undefined) settings.set('theme', payload.theme);
     if (payload.timeSpentColumnManual !== undefined) settings.set('timeSpentColumnManual', payload.timeSpentColumnManual);
     settings.set('setupComplete', true);

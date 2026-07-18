@@ -320,22 +320,46 @@ async function addTimeSpent(itemId, addMs) {
 }
 
 /**
- * "Comment to Monday" — posts a note as an update on the item. NOTE ONLY.
- * It does NOT touch the Time Spent number (that's handled additively on Stop), and
- * the caller does NOT reset the timer or local totals. An empty note is a no-op.
- * (sessionMs/totalMs/sessionCount are unused now; kept for signature compatibility.)
+ * "Comment to Monday" — posts a note as an update on the item, optionally @mentioning
+ * Monday users so they get notified. NOTE + MENTION ONLY: does NOT touch the Time Spent
+ * number (handled additively on Stop) and does NOT reset the timer.
+ * @param note        the comment text (may be empty if a mention is given).
+ * @param mentionIds  array of Monday user ids to @mention (optional).
+ * Mentions go through create_update's `mentions_list` — NOT a typed "@" in the body,
+ * which does not notify. If Monday rejects the mention, the note is still posted alone so
+ * a comment is never lost. (sessionMs/totalMs/sessionCount are vestigial.)
  */
-async function logExport(itemId, sessionMs, totalMs, sessionCount, note) {
+async function logExport(itemId, sessionMs, totalMs, sessionCount, note, mentionIds) {
   if (isDemoMode) return { ok: true };
   const trimmed = (note || '').trim();
-  if (!trimmed) return { ok: true }; // nothing to post
-  await gql(
-    `mutation ($i: ID!, $body: String!) {
-       create_update(item_id: $i, body: $body) { id }
-     }`,
-    { i: itemId, body: trimmed }
-  );
-  return { ok: true };
+  const mentions = (mentionIds || []).filter(Boolean).map((id) => String(id));
+  if (!trimmed && !mentions.length) return { ok: true }; // nothing to post
+  const body = trimmed || ' '; // Monday requires a non-empty body
+  const mentionsLiteral = mentions.length
+    ? `, mentions_list: [${mentions.map((id) => `{ id: ${JSON.stringify(id)}, type: User }`).join(', ')}]`
+    : '';
+  try {
+    await gql(
+      `mutation ($i: ID!, $body: String!) {
+         create_update(item_id: $i, body: $body${mentionsLiteral}) { id }
+       }`,
+      { i: itemId, body }
+    );
+    return { ok: true };
+  } catch (err) {
+    if (mentions.length) {
+      // Mention rejected (schema/permissions/version) — post the note without it so the
+      // comment is never lost. Flagged so the renderer can note it once.
+      await gql(
+        `mutation ($i: ID!, $body: String!) {
+           create_update(item_id: $i, body: $body) { id }
+         }`,
+        { i: itemId, body }
+      );
+      return { ok: true, mentionSkipped: true };
+    }
+    throw err;
+  }
 }
 
 /**

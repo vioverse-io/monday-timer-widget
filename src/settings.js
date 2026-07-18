@@ -35,6 +35,9 @@ const defaults = {
   // Startup
   launchOnStartup: false,
 
+  // Close button hides to the system tray (keeps running) instead of quitting.
+  closeToTray: true,
+
   // Appearance: 'dark' | 'light' | 'auto' (follow Windows)
   theme: 'dark',
 

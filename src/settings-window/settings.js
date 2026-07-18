@@ -14,7 +14,7 @@
         longSession: { enabled: true, hours: 4 },
         morningCheckin: { enabled: true }
       },
-      launchOnStartup: false, theme: 'dark', demoMode: true
+      launchOnStartup: false, closeToTray: true, theme: 'dark', demoMode: true
     }),
     save: (p) => { console.log('save', p); return Promise.resolve({ ok: true }); },
     test: () => Promise.resolve({ ok: false, error: 'Electron only' }),
@@ -92,6 +92,7 @@
     $('morning-on').checked = sf.morningCheckin?.enabled ?? true;
 
     $('startup-on').checked = !!s.launchOnStartup;
+    $('tray-on').checked = s.closeToTray !== false; // default on
 
     $('theme').value = s.theme || 'dark';
     applyTheme(s.theme || 'dark');
@@ -144,6 +145,7 @@
         morningCheckin: { enabled: $('morning-on').checked }
       },
       launchOnStartup: $('startup-on').checked,
+      closeToTray: $('tray-on').checked,
       theme: $('theme').value,
       timeSpentColumnManual: $('ts-col') ? $('ts-col').value : ''
     };

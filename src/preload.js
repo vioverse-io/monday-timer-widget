@@ -23,9 +23,10 @@ contextBridge.exposeInMainWorld('timerAPI', {
   undoSwitch: () => ipcRenderer.invoke('undo-switch'),
   morningChoice: (choice) => ipcRenderer.invoke('morning-choice', choice),
   subtractTime: (ms) => ipcRenderer.invoke('subtract-time', { ms }),
+  setElapsed: (ms) => ipcRenderer.invoke('set-elapsed', { ms }),
   adjustLastSession: (itemId, ms) => ipcRenderer.invoke('adjust-last-session', { itemId, ms }),
   getExportInfo: (itemId) => ipcRenderer.invoke('get-export-info', itemId),
-  logTime: (itemId, note) => ipcRenderer.invoke('log-time', { itemId, note }),
+  logTime: (itemId, note, mentionId) => ipcRenderer.invoke('log-time', { itemId, note, mentionId }),
 
   // ---- fire-and-forget ----
   viewChanged: (view, pillW) => ipcRenderer.send('view-changed', view, pillW),
@@ -38,6 +39,7 @@ contextBridge.exposeInMainWorld('timerAPI', {
   resizeTo: (dw, dh) => ipcRenderer.send('resize-to', { dw, dh }),
   resizeEnd: () => ipcRenderer.send('resize-end'),
   quitApp: () => ipcRenderer.send('quit-app'),
+  closeRequest: () => ipcRenderer.send('close-request'),
   openSettings: () => ipcRenderer.send('open-settings'),
   dismissBanner: () => ipcRenderer.send('dismiss-banner'),
   refreshJobs: () => ipcRenderer.send('refresh-jobs'),
