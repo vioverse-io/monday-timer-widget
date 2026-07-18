@@ -238,29 +238,59 @@ async function logSession(itemId, startedAt, endedAt) {
   return { ok: true };
 }
 
+// Parse a Time Spent TEXT value ("Xh Ym Zs", "Ym Zs", "45s", "2h") to ms, second
+// precision. Empty → 0. Unrecognised shape → null (so the caller can fall back to the
+// Numbers column instead of trusting a bad parse).
+function parseTimeSpentText(raw) {
+  const str = (raw ?? '').toString().trim();
+  if (!str) return 0;
+  const h = /(\d+)\s*h/i.exec(str);
+  const m = /(\d+)\s*m/i.exec(str);
+  const s = /(\d+)\s*s/i.exec(str);
+  if (!h && !m && !s) return null; // not the "Xh Ym Zs" format
+  return (h ? +h[1] * 3600000 : 0) + (m ? +m[1] * 60000 : 0) + (s ? +s[1] * 1000 : 0);
+}
+
 /**
- * Read the job's current "Time Spent" value from Monday. The NUMBERS column is the
- * canonical store and holds WHOLE MINUTES (e.g. "23"). Returns milliseconds.
- *   - Empty cell            → 0   (safe to add onto)
- *   - Column not detected   → null (caller must NOT write, to avoid clobbering)
- *   - Read/network failure  → null (caller must NOT write; log-time will retry)
+ * Read the job's current "Time Spent" from Monday, in ms. Reads the TEXT column
+ * ("Xh Ym Zs") FIRST so sub-minute SECONDS are preserved across stops; falls back to
+ * the whole-minute Numbers column only when the Text cell is blank or absent.
+ * (This reverses the old "Numbers is the canonical read-back" rule — Text is now the
+ * second-precision base for additive writes.)
+ *   - Empty cell(s)          → 0    (safe to add onto)
+ *   - No column detected      → null (caller must NOT write, to avoid clobbering)
+ *   - Read/network failure    → null (caller must NOT write)
  * Never throws.
  */
 async function readTimeSpentMs(itemId) {
-  if (isDemoMode || !timeSpentColumnId) return null;
+  if (isDemoMode) return null;
+  const ids = [timeSpentTextColumnId, timeSpentColumnId].filter(Boolean);
+  if (!ids.length) return null; // no Time Spent column detected
   try {
     const data = await gql(
       `query ($i: [ID!], $c: [String!]) {
          items(ids: $i) { column_values(ids: $c) { id text value } }
        }`,
-      { i: [String(itemId)], c: [timeSpentColumnId] }
+      { i: [String(itemId)], c: ids }
     );
-    const cv = data.items?.[0]?.column_values?.[0];
-    const raw = (cv?.text ?? '').toString().trim();
-    if (!raw) return 0; // empty cell — start from zero
-    const minutes = parseFloat(raw.replace(/,/g, ''));
-    if (!isFinite(minutes) || minutes < 0) return 0;
-    return Math.round(minutes * 60000);
+    const cols = data.items?.[0]?.column_values || [];
+    // TEXT column first (second precision).
+    const textRaw = timeSpentTextColumnId
+      ? (cols.find((c) => c.id === timeSpentTextColumnId)?.text ?? '').toString().trim()
+      : '';
+    if (textRaw) {
+      const parsed = parseTimeSpentText(textRaw);
+      if (parsed !== null) return parsed; // fall through only on unrecognised format
+    }
+    // Numbers column (whole minutes) — fallback.
+    if (timeSpentColumnId) {
+      const numRaw = (cols.find((c) => c.id === timeSpentColumnId)?.text ?? '').toString().trim();
+      if (!numRaw) return 0;
+      const minutes = parseFloat(numRaw.replace(/,/g, ''));
+      if (!isFinite(minutes) || minutes < 0) return 0;
+      return Math.round(minutes * 60000);
+    }
+    return 0;
   } catch {
     return null; // couldn't read — signal "unknown" so we never overwrite
   }
@@ -277,7 +307,7 @@ async function readTimeSpentMs(itemId) {
  * Never overwrites: if the current value can't be read, it throws instead of guessing.
  */
 async function addTimeSpent(itemId, addMs) {
-  if (isDemoMode || !timeSpentColumnId) return { ok: false, reason: 'no-column' };
+  if (isDemoMode || (!timeSpentColumnId && !timeSpentTextColumnId)) return { ok: false, reason: 'no-column' };
   const add = Math.max(0, addMs || 0);
   if (add === 0) return { ok: true, newTotalMs: null };
   const existingMs = await readTimeSpentMs(itemId);
@@ -310,11 +340,11 @@ async function logExport(itemId, sessionMs, totalMs, sessionCount, note) {
 
 /**
  * Write an ABSOLUTE all-time total to both Time Spent columns.
- *   Numbers column: whole minutes (e.g. "23")   ← canonical, read back on next log
- *   Text column:    formatted (e.g. "7h 10m 0s")
- * The NUMBERS column is written LAST because logExport() reads it back to compute the
+ *   Text column:    formatted "Xh Ym Zs"  ← canonical read-back (second precision)
+ *   Numbers column: whole minutes "23"    ← display / rollups only
+ * The TEXT column is written LAST because readTimeSpentMs() reads it back to compute the
  * next additive total — committing it last keeps a retry safe if an earlier write fails.
- * Only called from logExport (on Log-to-Monday). We no longer auto-write on every stop.
+ * Called from addTimeSpent (on every Stop/Switch).
  */
 async function updateTimeSpent(itemId, totalMs) {
   if (isDemoMode) return;
@@ -323,18 +353,8 @@ async function updateTimeSpent(itemId, totalMs) {
   const m = Math.floor((ms % 3600000) / 60000);
   const s = Math.floor((ms % 60000) / 1000);
 
-  // Text column first (display only — "7h 10m 0s").
-  if (timeSpentTextColumnId) {
-    const formatted = `${h}h ${m}m ${s}s`;
-    await gql(
-      `mutation ($b: ID!, $i: ID!, $c: String!, $val: String!) {
-         change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
-       }`,
-      { b: boardId, i: itemId, c: timeSpentTextColumnId, val: formatted }
-    );
-  }
-
-  // Numbers column LAST — canonical value (whole minutes).
+  // Numbers column first (whole minutes — display / rollups only; no longer the
+  // read-back base, so it's safe to write before the canonical Text value).
   if (timeSpentColumnId) {
     const minutes = Math.round(ms / 60000);
     await gql(
@@ -342,6 +362,18 @@ async function updateTimeSpent(itemId, totalMs) {
          change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
        }`,
       { b: boardId, i: itemId, c: timeSpentColumnId, val: String(minutes) }
+    );
+  }
+
+  // Text column LAST — canonical second-precision value ("7h 10m 30s"), read back by
+  // readTimeSpentMs on the next add. Committing it last keeps a retry safe.
+  if (timeSpentTextColumnId) {
+    const formatted = `${h}h ${m}m ${s}s`;
+    await gql(
+      `mutation ($b: ID!, $i: ID!, $c: String!, $val: String!) {
+         change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $val) { id }
+       }`,
+      { b: boardId, i: itemId, c: timeSpentTextColumnId, val: formatted }
     );
   }
 }
