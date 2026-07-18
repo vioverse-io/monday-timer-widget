@@ -1,5 +1,56 @@
 # Changelog
 
+## v2.4.2
+- Minimize no longer flashes a full-height bar before the window snaps down (fixed 48px bar).
+- Launch no longer flashes an oversized/white frame (window shows only when ready to paint).
+- The minimized bar's window now re-fits automatically whenever its content changes
+  (ResizeObserver) — covers fonts loading, job number appearing, clock gaining a digit.
+- Resume bar updates its job when the jobs list loads while minimized.
+- Docs refreshed: CLAUDE.md and README.md now describe the current app (v2.4.x window
+  model, ADDITIVE Time Spent writes); stale v2.2.0 handoff removed; changelog backfilled.
+
+## v2.4.1
+- HOTFIX: minimized bar sized itself from the window instead of its content — dead space
+  or clipped buttons depending on the window's previous size. The bar now hugs its
+  content (`width: max-content`) and the measurement is correct in both directions.
+- HOTFIX: reverted v2.4.0's "remember your resize" — the saved delta leaked into every
+  view and the launch size (giant launch window, cropped views). Full views are back to
+  fixed sizes; the stray saved value is wiped on launch.
+- Stopped bar gains a **Switch** button (resume-only was a dead end after relaunch).
+
+## v2.4.0
+- Minimized bar width is measured from the real content and the window wraps it (fixes
+  the clipped Resume button).
+- Starting a job can never silently discard a running session (start-while-running
+  switches and logs; stale post-stop Play state clears when any timer starts).
+- Same-day relaunch subtracts the time the app wasn't running (crash / PC off), with a
+  "Timer adjusted" notification.
+- Safety-net date math switched to LOCAL days — fixes the EOD nudge re-firing in the
+  evening and the morning check-in being skipped for late-evening starts (UTC bug).
+- Failed Monday minute-writes are queued, retried every 2 minutes, and visible (toasts +
+  yellow sync note) instead of silent.
+- Time Spent column: forgiving title matching, manual override picker in Settings with
+  auto-detect status, detection failure toasted.
+- Minimized clock shows real m:ss and ticks every second (was "12m").
+- Picker search spans the whole board, not just the active group tab.
+- Hotkey recorder requires a modifier — a bare letter can no longer hijack a key
+  system-wide.
+- "Today" no longer includes yesterday's time after midnight (display-side clip).
+- Expanding from the bar returns to the picker if that's where you were.
+- Monday API version bumped to 2026-01; `items_page` limit 100 → 500.
+- Electron/electron-builder pinned to exact versions (were "latest").
+
+## v2.3.1
+- Applied full window/pill management spec (HANDOFF-5): pill window locked via
+  min==max + self-heal resize guard; grabber-only drag with move-start/to/end IPC;
+  Esc/double-click escape hatches; Stop→Resume in the bar; recents capped at 4;
+  safety-net alerts auto-expand from the bar; additive Time Spent write (the data-loss
+  fix: add session minutes, never overwrite totals).
+
+## v2.3.0
+- Mini controller redesign per Claude Design spec: grabber ⠿, filled high-contrast
+  buttons, number chip, −5/−15, comment, stop, expand; stopped state with Resume.
+
 ## v2.1.0
 - **UI redesign** per Claude Design handoff — compact, content-sized views with a cleaner, calmer design system.
 - **Hero timer**: 48px monospace clock (JetBrains Mono) — the running time is now the focal point of the tracking view.

@@ -21,6 +21,13 @@ v2 posted a comment on every export. v2.2.0 behavior:
 
 ## Still planned
 
+### Small user-requested items (carried from v2.2.0 handoff)
+- **Sort button in picker** — alphabetical / most recent / group / Monday order
+  (currently due-date).
+- **Session log** — per-job start/stop history, locally stored (below).
+- Tray icon on Windows packaged builds — diagnostic logging added in v2.0.2, still
+  unconfirmed.
+
 ### Session Log
 Every start/stop event recorded locally per job:
 

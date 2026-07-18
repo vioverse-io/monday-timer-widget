@@ -838,6 +838,7 @@
       jobs = j;
       if (view === 'picker') { renderFilterPills(); renderPicker(); }
       if (view === 'idle') renderIdleRecents();
+      if (view === 'pill') renderPill(); // resume target/number can change once jobs load
     });
     api.onToast(showToast);
     api.onAlert(showAlert);
@@ -855,9 +856,13 @@
     const s = await api.getState();
     applyState(s);
 
-    // Fonts can finish loading after the pill was measured — re-measure once ready.
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => { if (view === 'pill') sendPillSize(); });
+    // Any change to the bar's rendered size (fonts loading, job number appearing,
+    // clock gaining a digit, content swap) re-fits the window automatically.
+    const bar = $('view-pill');
+    if (window.ResizeObserver && bar) {
+      new ResizeObserver(() => {
+        if (view === 'pill' && !bar.classList.contains('hidden')) sendPillSize();
+      }).observe(bar);
     }
   }
 

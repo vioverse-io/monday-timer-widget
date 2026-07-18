@@ -617,7 +617,7 @@ textarea.search {
   --p-chip-bg:rgba(233,84,104,.18); --p-chip-fg:#F58399;
   --p-cmt-bg:rgba(233,84,104,.22); --p-cmt-fg:#F7A6B5;
   --p-grab:#6E6659; --p-red:#EA5468;
-  height: 100vh;
+  height: 48px;
   width: max-content;
   display: inline-flex; align-items: center; gap: 7px;
   background: var(--p-bar); border: 1px solid var(--p-bar-bd);

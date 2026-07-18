@@ -16,79 +16,97 @@ This is separate from the `vio` shortcut (that one goes to ~/isolated-test-area 
 Vioverse). This project lives at `vioverse-io/monday-timer-widget` on GitHub (public).
 
 ## What this is
-A frameless, always-on-top Windows Electron widget that tracks time locally and exports
-accumulated time to a Monday.com board via manual exports. Single-user, no central server.
-Full spec: `monday_timer_widget_build_prompt_v2.md`. Architecture: `README.md`.
-v3 planning: `v3-planning.md`.
+A frameless, always-on-top Windows Electron widget that tracks time locally and writes
+completed sessions to a Monday.com board. Single-user, no central server.
+Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architecture:
+`README.md`. Backlog: `v3-planning.md`. Change specs live in `production/HANDOFF-N-*.md`
+— the highest N is the latest applied spec.
 
-## Non-negotiable design rule (local-clock model)
-Monday's API cannot write to the time-tracking column at all (mutations blank it).
-The widget **owns the clock**. Stop/switch accumulate time locally and auto-write the
-all-time total to two "Time Spent" columns (Numbers + Text) via
-`change_simple_column_value`. Comments are posted only when the user types a note
-(via `create_update`). Never try to write to the time-tracking column.
+## Non-negotiable rules (violating these caused real data loss / broken windows)
+1. **Local-clock model.** Monday's API cannot write to the time-tracking column
+   (mutations blank it). The widget owns the clock. Never write to that column.
+2. **Time Spent writes are ADDITIVE, never overwrite.** On every stop/switch,
+   `accumulateSession()` → `api.addTimeSpent(itemId, durationMs)` reads the current
+   Numbers-column value and adds THIS session's minutes. Multiple machines write to the
+   same board — an overwrite with a local total destroys the other user's time. The
+   old `updateTimeSpent` (write all-time total) is the bug, not the feature.
+3. **NEVER call `setResizable()` on the main window** — toggling it collapses the
+   frameless window on Windows. The window stays `resizable: true` forever;
+   pill-mode locking is done via `setMinimumSize == setMaximumSize`.
+4. **The preload file is `src/preload.js`.** There is no `src/renderer/preload.js`;
+   never create one.
+5. **Day/date comparisons use the LOCAL calendar day** (`localDay()` in
+   safety-nets.js). Never `toISOString()` for day math — it's UTC and breaks evening
+   behavior for US timezones (EOD nudge re-fires, morning check-in skipped).
+6. **No `userSize` / shared resize memory.** Tried in v2.4.0, reverted in v2.4.1: a
+   shared delta leaks one view's resize into every view and the launch size. Full views
+   use fixed `VIEW_SIZES`; grip-resize is per-session only (snaps back on view change —
+   accepted). If ever revisited it must be per-view with content-based minimums.
+7. Failed Monday minute-writes queue in `pendingTimeWrites` (retried every 2 min,
+   user is toasted). Never make a write path silent.
 
-## Status (keep this updated as work progresses)
-- **v2.2.0** "Focus" UI redesign + Time Spent columns + UX fixes.
-  - **Theme**: warm charcoal (dark) / cream paper (light). Coral accent (`#EA5468`).
-    Abstract gauge mark replaces old clock-in-red-tile. 56px JetBrains Mono timer.
-    Elevated inner cards (`.run-card`), pill buttons (21px radius), progress scrubber
-    on running view. Design source: `production/` directory.
-  - **Window sizes**: idle 360px, running 324px, picker 480px (width 340 unchanged).
-    Window bg: dark `#1E1B17`, light `#F5F1EB`.
-  - **Time Spent columns**: on every stop/switch, auto-writes all-time total to two
-    Monday columns — Numbers (total minutes, e.g. `220`) and Text (`3h 40m 0s`).
-    Auto-detected on startup by type + title "Time Spent".
-  - **Comment to Monday**: renamed from "Log to Monday". Posts only the user's note
-    (no timing metadata in comments — columns have that). Comment only posts when
-    a note is entered.
-  - **Stop → Play**: stopped view shows Play button (restarts same job) + Switch.
-    No auto-dismiss; stays until user acts.
-  - **Paused indicator**: picker shows gray pill with white play icon + "Paused"
-    label on last-stopped job. Consistent on both stop and switch flows.
-  - **Status dots**: green (running, pulsing), gray (idle), red square (stopped).
-    Topbar label auto-colors from dot (`.dot-green + .topbar-label` etc.).
-- X button quits the app. Minimize collapses to pill.
-- Resize grip uses absolute-delta + `setBounds()` (no feedback loop).
-- Installer delivered via GitHub Releases at `vioverse-io/monday-timer-widget`.
+## Status
+- **v2.4.2** on `main`. All of HANDOFF-5/6/7/8 applied (see `production/`).
+- Window/pill model: one frameless window. Full views auto-size via `VIEW_SIZES`
+  (idle 340×392, running 340×324, picker 340×480). Minimize = pill (48px bar):
+  the renderer measures the bar's true content width (`width: max-content` +
+  ResizeObserver → `viewChanged('pill', w)`), main sizes the window to match, keeps
+  the RIGHT edge pinned, and locks min==max so native edge-resize is inert; a
+  self-heal `resize` handler snaps back any stray resize. First show waits for
+  `ready-to-show` (no launch flash).
+- Pill (running): grabber ⠿ drag-to-move · dot · number chip · m:ss clock (ticks every
+  second) · today chip · −5/−15 · comment · stop · expand. Pill (stopped): number chip +
+  Resume + Switch + expand. Esc, double-click, or clicking the info area expands.
+- Sessions can't be silently lost: start-while-running switches (logs the old session);
+  stale post-stop "Play" state clears when any timer starts; same-day relaunch subtracts
+  the time the app wasn't running (`lastSeenAt` gap, >2 min, with a notification);
+  different-day relaunch = morning check-in modal.
+- Monday: additive `addTimeSpent` on stop/switch; failures queue + toast; catch-up toast
+  when flushed. Column detection is forgiving (normalized title match), a manual
+  override lives in Settings (with detected-column status line), failure is toasted.
+  Comments (`create_update`) only when the user types a note. API version 2026-01,
+  `items_page(limit: 500)`.
+- Picker: group pills scope browsing; typing searches the WHOLE board (results colored
+  by their own group). Recents capped at 4. Expand from pill returns to the picker if
+  that's where you were.
+- Settings: hotkey recorder requires a modifier (Ctrl/Alt/Win); Time Spent column
+  picker with auto-detect status; theme dark/light/auto.
+- Electron pinned exactly (42.2.0) — "latest" caused user/coworker version drift.
 
 ## How to verify changes (no Monday token needed)
 - **UI in a plain browser** (harness): serve `src/renderer`, then open
   `index.html` with deep-link params:
   `?running=1` · `?view=picker` · `?welcome=1` · `?alert=long` (or `idle`/`eod`) ·
   `?morning=1` · `?sync=2` · `?theme=light`.
-  `src/renderer/harness.js` mocks the IPC bridge; it is inert under Electron and excluded
-  from packaged builds.
+  `src/renderer/harness.js` mocks the IPC bridge; inert under Electron, excluded from
+  packaged builds.
 - **Main-process self-test:**
   `SMOKE_TEST=1 ELECTRON_ENABLE_LOGGING=1 ./node_modules/.bin/electron . --no-sandbox`
+  (expects the 12 mock jobs).
 - **Render real Electron to PNGs:** `CAPTURE=1 ... electron .` → writes `/tmp/cap-*.png`.
 
 ## Build the Windows installer
 ```
 npm run dist     # → dist/CompuMailTimer-Setup-<version>.exe  (NSIS, x64)
 ```
-Building from WSL needs **wine** (already installed). If the first wine call (rcedit/NSIS)
-times out, run `wineboot --init` once first, then rebuild. Unsigned → SmartScreen warns
-("More info → Run anyway"). Bump `package.json` version per build so installers are distinct.
+Building from WSL needs **wine** (already installed). If the first wine call
+(rcedit/NSIS) times out, run `wineboot --init` once first, then rebuild. Unsigned →
+SmartScreen warns ("More info → Run anyway"). Bump `package.json` version per build.
+Never hand out an installer until the fixes it contains are user-tested and pushed.
 
 ## Conventions / gotchas
 - Main process is **CommonJS**; `electron-store` is **v8** (CommonJS). Do not switch to ESM.
-- Frameless window: interactive elements must be `-webkit-app-region: no-drag` (and SVGs
-  inside buttons need `pointer-events:none`) or clicks get swallowed. The pill and resize
-  grip use JS pointer-drag, not app-region.
-- Window is `resizable:true` so programmatic sizing works both directions. Each view
-  auto-sizes to its content height via `VIEW_SIZES` in `main.js`. Resize grip uses
-  `setBounds()` atomically (absolute deltas from drag start) to avoid the feedback loop
-  from incremental `setContentSize` + `setPosition`. X button quits; minimize collapses
-  to pill.
-- API token encrypted via `safeStorage` (tied to Windows user account, survives reinstalls
-  on the same machine). Logs in `userData/logs` (weekly rotation).
-- Job picker pulls all groups from the board API; filter pills are built dynamically with
-  each group's Monday color. No manual group configuration in settings.
-- Jobs sorted by due date (earliest first). Recents on idle screen use persisted history.
-- Time: **Today** = local-day-clipped unexported delta; **Total** = full unexported delta
-  (time since last Comment to Monday). Timezone EST.
-- Monday's API cannot write to the time-tracking column. Do not attempt it. Time is
-  written to "Time Spent" Numbers + Text columns via `change_simple_column_value` on
-  every stop. Comments posted via `create_update` only when user enters a note.
-- Commit only when the user asks.
+- Frameless window: interactive elements need `-webkit-app-region: no-drag`, SVGs inside
+  buttons need `pointer-events: none`. The pill grabber and resize grip use JS
+  pointer-drag (move-start/move-to/move-end, resize-start/to/end), not app-region.
+- Resize grip uses absolute deltas + atomic `setBounds()` (no feedback loop).
+- API token encrypted via `safeStorage`. Logs in `userData/logs` (weekly rotation).
+- Jobs sorted by due date; job numbers extracted by `jobNum()` (3–7 digits, several
+  name shapes). "Today" clips to the local day (display-side handles past-midnight
+  sessions).
+- The user is a designer, not a coder: plain English, short answers, walk through test
+  checklists one item at a time. Handoffs from Claude Design arrive as
+  `production/HANDOFF-N-*.md` — apply them EXACTLY as written; if an anchor doesn't
+  match the file, STOP and say so instead of improvising.
+- Commit only when the user confirms tests pass; then push to `main` and verify the
+  push landed (the design reviewer reads from GitHub).

@@ -194,6 +194,12 @@ function createMainWindow() {
     }
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // First show happens only after the renderer painted (and DPI scaling applied) —
+  // otherwise Windows flashes one oversized/white frame at launch.
+  mainWindow.once('ready-to-show', () => {
+    const wasHidden = app.getLoginItemSettings().wasOpenedAsHidden;
+    if (!wasHidden && !process.env.SMOKE_TEST && !process.env.CAPTURE) showWidget();
+  });
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
   mainWindow.on('move', savePosition);
   // Self-heal: if ANYTHING resizes the window while it's a pill (native quirks,
@@ -972,9 +978,6 @@ if (!gotLock) {
     setTimeout(processTimeWrites, 30 * 1000); // early catch-up pass after launch
     setInterval(() => { if (mainWindow && mainWindow.isVisible()) pushJobs(); }, 5 * 60 * 1000);
 
-    // Show on launch unless started hidden at OS login (or running the smoke test).
-    const wasHidden = app.getLoginItemSettings().wasOpenedAsHidden;
-    if (!wasHidden && !process.env.SMOKE_TEST) showWidget();
 
     log(`started (demoMode=${demoMode})`);
 
