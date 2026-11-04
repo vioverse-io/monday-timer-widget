@@ -20,7 +20,7 @@ const API_VERSION = '2026-01';
 
 let isDemoMode = false;
 let token = null;
-let boardId = '7833051194';
+let boardId = '18434287092';
 let timeTrackingColumnId = null; // confirmed in Step 0; null until then
 let timeSpentColumnId = null;    // Numbers "Time Spent" column; null until detected
 let timeSpentTextColumnId = null; // Text "Time Spent" column; null until detected
@@ -50,7 +50,10 @@ async function gql(query, variables = {}) {
       Authorization: token, // raw token, no "Bearer " prefix
       'API-Version': API_VERSION
     },
-    body: JSON.stringify({ query, variables })
+    body: JSON.stringify({ query, variables }),
+    // A hung request would otherwise stall the one-at-a-time write chain forever;
+    // a timeout turns it into a normal failure (queued + retried).
+    signal: AbortSignal.timeout(30000)
   });
   if (!res.ok) {
     throw new Error(`Monday HTTP ${res.status}`);
@@ -274,6 +277,10 @@ async function readTimeSpentMs(itemId) {
       { i: [String(itemId)], c: ids }
     );
     const cols = data.items?.[0]?.column_values || [];
+    // A column we asked for that didn't come back means this item isn't on the board
+    // those column IDs belong to (board just changed, column deleted, item deleted).
+    // Treating that as "empty = 0" would overwrite the real value — so it's unknown.
+    if (!ids.every((id) => cols.some((c) => c.id === id))) return null;
     // TEXT column first (second precision).
     const textRaw = timeSpentTextColumnId
       ? (cols.find((c) => c.id === timeSpentTextColumnId)?.text ?? '').toString().trim()
@@ -306,15 +313,27 @@ async function readTimeSpentMs(itemId) {
  * @param addMs  the completed session's duration to add (ms).
  * Never overwrites: if the current value can't be read, it throws instead of guessing.
  */
-async function addTimeSpent(itemId, addMs) {
+// Writes run ONE AT A TIME. Two overlapping read-then-write cycles on the same item
+// (Stop then a quick post-stop −5, or a retry flush racing a fresh Stop) would both
+// read the same base and the second write would erase the first one's minutes.
+let writeChain = Promise.resolve();
+function addTimeSpent(itemId, addMs) {
+  const run = writeChain.then(() => addTimeSpentNow(itemId, addMs));
+  writeChain = run.catch(() => {});
+  return run;
+}
+
+// addMs may be NEGATIVE: a post-stop −5/−15 correction. Still a delta on Monday's
+// current value (never a local total), clamped at 0 by updateTimeSpent.
+async function addTimeSpentNow(itemId, addMs) {
   if (isDemoMode || (!timeSpentColumnId && !timeSpentTextColumnId)) return { ok: false, reason: 'no-column' };
-  const add = Math.max(0, addMs || 0);
+  const add = Math.round(addMs || 0);
   if (add === 0) return { ok: true, newTotalMs: null };
   const existingMs = await readTimeSpentMs(itemId);
   if (existingMs === null) {
     throw new Error("Couldn't read current Time Spent from Monday — not overwriting.");
   }
-  const newTotalMs = existingMs + add;
+  const newTotalMs = Math.max(0, existingMs + add);
   await updateTimeSpent(itemId, newTotalMs); // writes text then numbers (canonical last)
   return { ok: true, newTotalMs };
 }

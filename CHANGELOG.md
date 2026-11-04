@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.6.2
+- **New board**: default board is now 18434287092. Installs still on the old board
+  (7833051194) are moved once, with a toast; a later manual choice is respected.
+
+## v2.6.1 (bundled into v2.6.2; never released on its own)
+- **No Time Spent column → time is kept**, not dropped: the session is queued and sent
+  as soon as a column is detected (Settings → Save, or restart).
+- **Honest stop label**: the line under the clock shows the real result — "Saving to
+  Monday…", "Saved to Monday", "Not saved yet — retrying", "Not saved — no Time Spent
+  column", "Nothing to save". It used to say "Saved to Monday" regardless.
+- **Overlapping writes can't erase each other**: Monday writes now run one at a time
+  (e.g. Stop then a quick −5, or a retry flush racing a Stop used to lose minutes).
+- **Post-stop −5/−15 corrects Monday too** (was local-only), capped to the session just
+  stopped (a −15 on a 2-minute session used to remove 15 minutes of earlier time).
+- **Text-only boards**: no false "minutes will NOT be written" warning when only the
+  Text "Time Spent" column exists; Settings names both detected columns.
+- **Stale-column guard**: if the Time Spent column isn't on the item (e.g. right after
+  a board change), the widget refuses to write rather than treating it as empty.
+- Requests time out after 30 s (a hung request can't stall the write queue); retry
+  passes can't overlap or drop entries queued mid-pass; toasts show m:s, not "0m".
+
 ## v2.6.0
 - **Visual refresh**: Monday-like neutral light palette (now the default theme);
   neutral graphite dark theme (no warm/gold cast). Soft gray shadows throughout

@@ -15,6 +15,17 @@
   let tickInterval = null;
   let toastTimer = null;
   let stoppedSession = null;  // { itemId, itemName, elapsedMs } — post-stop adjustment window
+  // Outcome of the latest Monday write per job (pushed by main on 'sync-status').
+  const writeStatuses = {};
+  const WRITE_LABELS = {
+    saving: 'Saving to Monday…',
+    saved: 'Saved to Monday',
+    queued: 'Not saved yet — retrying',
+    'no-column': 'Not saved — no Time Spent column',
+    demo: 'Demo — not sent to Monday',
+    empty: 'Nothing to save'
+  };
+  const writeLabel = (itemId) => WRITE_LABELS[writeStatuses[String(itemId)]] || '';
   let stoppedTimer = null;
   let lastStoppedItemId = null; // highlights the last-stopped job in the picker
   let pillRunning = null; // running-state the pill window is currently sized for
@@ -606,7 +617,7 @@
     renderJob(itemName);
     $('elapsed').textContent = '0:00';
     $('today').textContent = '';
-    $('total').textContent = 'Saved to Monday';
+    $('total').textContent = writeLabel(itemId);
     $('topbar-label').textContent = 'STOPPED';
     setDot(false);
     $('status-dot').className = 'dot dot-red';
@@ -703,7 +714,13 @@
     )} since ${new Date(saved.startedAt).toLocaleString()}. What should we do?`;
     $('morning').classList.remove('hidden');
   }
-  function showSync({ count }) {
+  function showSync({ count, write }) {
+    if (write) {
+      writeStatuses[String(write.itemId)] = write.status;
+      if (stoppedSession && String(stoppedSession.itemId) === String(write.itemId)) {
+        $('total').textContent = writeLabel(write.itemId);
+      }
+    }
     if (count > 0) {
       $('sync').textContent = `${count} session${count > 1 ? 's' : ''} not yet saved to Monday — retrying`;
       $('sync').classList.remove('hidden');
@@ -786,6 +803,7 @@
       const elapsed = Math.max(0, Date.now() - state.startedAt - (state.subtractedMs || 0));
       stoppedSession = { itemId, itemName, elapsedMs: elapsed };
       lastStoppedItemId = itemId;
+      writeStatuses[String(itemId)] = 'saving'; // main's real outcome overwrites this
       const s = await api.stop();
       applyAfterAction(s);
       showStoppedSummary(itemId, itemName, elapsed);
@@ -880,6 +898,7 @@
       // (which races with the invoke response) won't transition to idle view.
       stoppedSession = { itemId, itemName, elapsedMs: elapsed };
       lastStoppedItemId = itemId;
+      writeStatuses[String(itemId)] = 'saving'; // main's real outcome overwrites this
       const s = await api.stop();
       applyAfterAction(s);
       showStoppedSummary(itemId, itemName, elapsed);

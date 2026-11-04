@@ -13,6 +13,7 @@
 //   ?alert=idle|long|eod   fire a safety-net alert
 //   ?morning=1        show the morning check-in modal
 //   ?sync=2           show the "N sessions not yet saved" indicator
+//   ?write=queued     outcome shown under the clock after Stop (queued | no-column; default saved)
 // And window.__harness.trigger(kind, arg) exposes the same for manual driving.
 
 (function () {
@@ -114,6 +115,12 @@
       const today = new Date().toDateString();
       if (jt.todayDate === today) jt.todayMs += dur;
       else { jt.todayDate = today; jt.todayMs = dur; }
+      // Mimic main's write outcome: 'saving' now, result shortly after.
+      // ?write=queued | no-column | empty picks the outcome (default: saved).
+      const itemId = T.itemId;
+      const outcome = params.get('write') || (dur ? 'saved' : 'empty');
+      emit('sync', { count: 0, write: { itemId, status: 'saving' } });
+      setTimeout(() => emit('sync', { count: outcome === 'queued' || outcome === 'no-column' ? 1 : 0, write: { itemId, status: outcome } }), 700);
     }
     T.running = false;
     T.itemId = T.itemName = T.startedAt = null;

@@ -6,7 +6,7 @@
 
   const api = window.settingsAPI || {
     get: () => Promise.resolve({
-      apiToken: '', boardId: '7833051194', selectedGroupIds: [], forceDemoMode: true,
+      apiToken: '', boardId: '18434287092', selectedGroupIds: [], forceDemoMode: true,
       hotkeyStop: 'CommandOrControl+Alt+T', hotkeyToggle: '',
       safety: {
         idleAutoStop: { enabled: true, minutes: 15 },
@@ -109,9 +109,11 @@
       });
       sel.value = info.manual || '';
       const st = $('ts-col-status');
-      if (info.manual) st.textContent = 'Manual override in use.';
-      else if (info.detected) st.textContent = `Auto-detected: "${info.detected}"`;
-      else if (info.ok) st.textContent = 'No Time Spent numbers column found — pick one above.';
+      const textNote = info.detectedText ? ` + Text "${info.detectedText}" (keeps seconds)` : '';
+      if (info.manual) st.textContent = 'Manual override in use.' + textNote;
+      else if (info.detected) st.textContent = `Auto-detected: Numbers "${info.detected}"` + textNote;
+      else if (info.detectedText) st.textContent = `Auto-detected: Text "${info.detectedText}" (keeps seconds). A Numbers column is optional.`;
+      else if (info.ok) st.textContent = 'No Time Spent column found. Add a Text or Numbers column named "Time Spent" to the board, then Save.';
       else st.textContent = 'Connect to Monday, save, then reopen Settings to load columns.';
     }
 

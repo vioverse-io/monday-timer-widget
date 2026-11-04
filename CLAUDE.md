@@ -46,7 +46,11 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
    user is toasted). Never make a write path silent.
 
 ## Status
-- **v2.6.0** on `main`. HANDOFF-5 through HANDOFF-14 applied (see `production/`).
+- **v2.6.2** on `main`. HANDOFF-5 through HANDOFF-14 applied (`production/` files stop
+  at 11 — 12–14 were never saved as files; their changes are in CHANGELOG.md). v2.6.1/
+  v2.6.2 were direct bug fixes with no handoff. **Next handoff number: HANDOFF-15.**
+- Board: **18434287092** ("Projects"). v2.6.2 moves installs still on the old board
+  7833051194 once (`boardMoveDone` flag); a later manual pick is respected.
 - Window/pill model: one frameless window. Full views auto-size via `VIEW_SIZES`
   (idle 340×392, running 340×324, picker 340×480). Minimize = pill (48px bar):
   the renderer measures the bar's true content width (`width: max-content` +
@@ -60,15 +64,24 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
   Resume + Switch + expand. Esc, double-click, or clicking the info area expands
   to the stopped-summary view (big number + Play + Switch + Comment), not the
   idle recents. Double-clicking the job number in the pill does NOT expand (guarded).
-- Stop → clock resets to 0:00, sub reads "Saved to Monday", button becomes Play
-  (restart same job). −5/−15 still available post-stop but clock stays 0:00.
+- Stop → clock resets to 0:00, button becomes Play (restart same job). The sub shows
+  the REAL write outcome pushed by main (`sync-status` `write` field): "Saving to
+  Monday…" → "Saved to Monday" / "Not saved yet — retrying" / "Not saved — no Time
+  Spent column" / "Nothing to save". −5/−15 post-stop: clock stays 0:00, and a
+  NEGATIVE delta is sent to Monday, capped to the session just stopped.
 - Sessions can't be silently lost: start-while-running switches (logs the old session);
   stale post-stop "Play" state clears when any timer starts; same-day relaunch subtracts
   the time the app wasn't running (`lastSeenAt` gap, >2 min, with a notification);
   different-day relaunch = morning check-in modal.
 - Monday: additive `addTimeSpent` on stop/switch; failures queue + toast; catch-up toast
-  when flushed. Column detection is forgiving (normalized title match), a manual
-  override lives in Settings (with detected-column status line), failure is toasted.
+  when flushed. All `addTimeSpent` calls are SERIALIZED (`writeChain`) — overlapping
+  read-then-writes on one item erased minutes. "No Time Spent column" sessions are
+  QUEUED (not dropped) and flush right after column detection. If a requested column
+  isn't on the item (stale IDs after a board change), the read returns unknown → no
+  write. Either column alone works: Text (additive base, keeps seconds) or Numbers
+  (whole minutes; only needed for Monday sums). Column detection is forgiving
+  (normalized title match), a manual Numbers override lives in Settings (status line
+  names both detected columns), and "neither found" is toasted.
   Comments (`create_update`) only when the user types a note; multi-select mention
   chips post an array of user ids. API version 2026-01, `items_page(limit: 500)`.
 - Picker: group pills scope browsing; typing searches the WHOLE board (results colored

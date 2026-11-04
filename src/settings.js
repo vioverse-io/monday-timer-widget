@@ -5,7 +5,7 @@
 const Store = require('electron-store');
 const { safeStorage } = require('electron');
 
-const DEFAULT_BOARD_ID = '7833051194';
+const DEFAULT_BOARD_ID = '18434287092';
 
 const defaults = {
   // Connection
@@ -57,6 +57,7 @@ const defaults = {
   // and the title of whatever was last auto-detected (for display in Settings).
   timeSpentColumnManual: '',
   detectedTimeSpent: '',
+  detectedTimeSpentText: '',
 
   // Crash recovery: the in-progress running session, persisted on every tick
   runningSession: null,
@@ -73,6 +74,20 @@ const defaults = {
 };
 
 const store = new Store({ name: 'compumail-timer', defaults });
+
+// One-time move (v2.6.2): the team moved from board 7833051194 to 18434287092.
+// Anyone still on the old board is switched ONCE; a later manual choice is respected.
+const OLD_BOARD_ID = '7833051194';
+let movedToNewBoard = false;
+if (!store.get('boardMoveDone')) {
+  if (String(store.get('boardId')) === OLD_BOARD_ID) {
+    store.set('boardId', DEFAULT_BOARD_ID);
+    store.set('selectedGroupIds', []);      // the old board's groups
+    store.set('timeSpentColumnManual', ''); // the old board's column pick
+    movedToNewBoard = true;
+  }
+  store.set('boardMoveDone', true);
+}
 
 function get(key) {
   return store.get(key);
@@ -158,5 +173,6 @@ module.exports = {
   pushRecent,
   getJobTimer,
   setJobTimer,
-  DEFAULT_BOARD_ID
+  DEFAULT_BOARD_ID,
+  movedToNewBoard
 };

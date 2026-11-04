@@ -128,10 +128,12 @@ function pushState() {
     mainWindow.webContents.send('state', appState());
   }
 }
-function pushSyncStatus() {
+// `write` (optional) = { itemId, status } — outcome of one Monday write, so the
+// stopped view can say "Saved to Monday" only when it's true.
+function pushSyncStatus(write) {
   const count = (settings.get('pendingTimeWrites') || []).length;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sync-status', { count });
+    mainWindow.webContents.send('sync-status', write ? { count, write } : { count });
   }
 }
 function sendToast(payload) {
@@ -394,35 +396,88 @@ function persistRunning() {
   settings.set('runningSession', timer.serialize());
 }
 
-// A completed session's minutes could not be added to Monday (offline, API error).
-// Keep it and retry every 2 minutes until it lands. The user is told both times.
-function queueTimeWrite(itemId, itemName, addMs) {
+// The session that most recently stopped — a post-stop −5/−15 may only take time
+// back from IT (a −15 on a 2-minute session removes 2 minutes, not earlier work).
+let lastSession = null; // { itemId, itemName, remainingMs }
+let processingWrites = false;
+
+const sameItem = (a, b) => String(a) === String(b);
+const hasPendingFor = (itemId) =>
+  (settings.get('pendingTimeWrites') || []).some((w) => sameItem(w.itemId, itemId));
+
+// Send a time delta to Monday: a finished session (positive) or a post-stop
+// correction (negative). Every outcome reaches the renderer ('saving' → 'saved' /
+// 'queued' / 'no-column') so the stopped view never claims a save that didn't happen.
+function sendTimeToMonday(itemId, itemName, addMs) {
+  if (!addMs) return;
+  if (demoMode) { pushSyncStatus({ itemId, status: 'demo' }); return; }
+  // A correction must land AFTER the session it corrects. If that session is still
+  // waiting in the queue, the correction waits behind it.
+  if (addMs < 0 && hasPendingFor(itemId)) {
+    queueTimeWrite(itemId, itemName, addMs, 'error', { quiet: true });
+    return;
+  }
+  pushSyncStatus({ itemId, status: 'saving' });
+  api.addTimeSpent(itemId, addMs).then((r) => {
+    if (r && r.ok === false) {
+      log('addTimeSpent: no Time Spent column on the board (queued)');
+      queueTimeWrite(itemId, itemName, addMs, 'no-column');
+    } else {
+      pushSyncStatus({ itemId, status: 'saved' });
+    }
+  }).catch((err) => {
+    log('addTimeSpent failed (queued): ' + err.message);
+    queueTimeWrite(itemId, itemName, addMs, 'error');
+  });
+}
+
+// Time could not be added to Monday (offline, API error, or no Time Spent column yet).
+// Keep it and retry every 2 minutes — and right after columns are detected — until it
+// lands. The user is told both times. Never dropped.
+function queueTimeWrite(itemId, itemName, addMs, reason = 'error', { quiet = false } = {}) {
   const q = settings.get('pendingTimeWrites') || [];
   q.push({ itemId, itemName, addMs, at: Date.now() });
   settings.set('pendingTimeWrites', q);
-  sendToast({ text: `Couldn't reach Monday — ${Math.round(addMs / 60000)}m kept locally, retrying`, durationMs: 7000 });
-  pushSyncStatus();
+  const amt = (addMs < 0 ? '−' : '') + fmt(Math.abs(addMs));
+  if (!quiet) {
+    sendToast(reason === 'no-column'
+      ? { text: `No "Time Spent" column on this board yet — ${amt} kept, will be sent once you add one.`, durationMs: 9000 }
+      : { text: `Couldn't reach Monday — ${amt} kept locally, retrying`, durationMs: 7000 });
+  }
+  pushSyncStatus({ itemId, status: reason === 'no-column' ? 'no-column' : 'queued' });
 }
 
 async function processTimeWrites() {
-  if (demoMode) return;
+  if (demoMode || processingWrites) return; // never two passes at once (double-adds)
   const q = settings.get('pendingTimeWrites') || [];
   if (!q.length) return;
+  processingWrites = true;
   const remaining = [];
+  const flushedItems = [];
   let flushedMs = 0;
-  for (const w of q) {
-    try {
-      const r = await api.addTimeSpent(w.itemId, w.addMs);
-      if (r && r.ok === false) { remaining.push(w); continue; } // column still unknown
-      flushedMs += w.addMs;
-    } catch {
-      remaining.push(w);
+  try {
+    for (const w of q) {
+      try {
+        const r = await api.addTimeSpent(w.itemId, w.addMs);
+        if (r && r.ok === false) { remaining.push(w); continue; } // column still unknown
+        flushedMs += w.addMs;
+        flushedItems.push(w.itemId);
+      } catch {
+        remaining.push(w);
+      }
     }
+  } finally {
+    // Keep anything queued WHILE this pass ran (queueTimeWrite only appends).
+    const current = settings.get('pendingTimeWrites') || [];
+    settings.set('pendingTimeWrites', remaining.concat(current.slice(q.length)));
+    processingWrites = false;
   }
-  settings.set('pendingTimeWrites', remaining);
   pushSyncStatus();
+  for (const id of new Set(flushedItems.map(String))) {
+    if (!hasPendingFor(id)) pushSyncStatus({ itemId: id, status: 'saved' });
+  }
   if (flushedMs > 0) {
-    sendToast({ text: `Caught up: ${Math.round(flushedMs / 60000)}m added to Monday`, durationMs: 5000 });
+    sendToast({ text: `Caught up: ${fmt(flushedMs)} added to Monday`, durationMs: 5000 });
   }
 }
 
@@ -446,7 +501,8 @@ function jobTimerBases(itemId) {
 }
 
 function accumulateSession(session) {
-  if (!session || !session.durationMs) return;
+  if (!session) return;
+  if (!session.durationMs) { pushSyncStatus({ itemId: session.itemId, status: 'empty' }); return; }
   const jt = settings.getJobTimer(session.itemId);
   jt.totalMs += session.durationMs;
   jt.deltaMs += session.durationMs;
@@ -459,23 +515,11 @@ function accumulateSession(session) {
     jt.todayMs = session.durationMs;
   }
   settings.setJobTimer(session.itemId, jt);
+  lastSession = { itemId: session.itemId, itemName: session.itemName, remainingMs: session.durationMs };
   // Add THIS session to Monday's Time Spent (reads current value + adds; never
-  // overwrites). Local totals above are the source of truth. Failures are queued
-  // and retried — and the user is TOLD, never silent.
-  if (!demoMode) {
-    api.addTimeSpent(session.itemId, session.durationMs).then((r) => {
-      if (r && r.ok === false) {
-        log('addTimeSpent skipped: ' + (r.reason || 'no-column'));
-        sendToast({
-          text: 'No "Time Spent" column is set — minutes were NOT written to Monday. Open Settings.',
-          durationMs: 9000
-        });
-      }
-    }).catch((err) => {
-      log('addTimeSpent failed (queued): ' + err.message);
-      queueTimeWrite(session.itemId, session.itemName, session.durationMs);
-    });
-  }
+  // overwrites). Local totals above are the source of truth. Failures — including
+  // "no Time Spent column yet" — are queued and retried, and the user is TOLD.
+  sendTimeToMonday(session.itemId, session.itemName, session.durationMs);
 }
 
 function startJob(jobInput) {
@@ -718,6 +762,15 @@ function detectColumns() {
     if (!tsCol) tsCol = cols.find((c) => isNumbers(c) && norm(c.title) === 'timespent');
     if (!tsCol) tsCol = cols.find((c) => isNumbers(c) && norm(c.title).includes('timespent'));
 
+    // Text column ("1h 41m 53s", keeps seconds). Either column alone is enough to
+    // write; together, Text keeps seconds and Numbers lets Monday sum minutes.
+    const tstCol = cols.find((c) => c.type === 'text' && norm(c.title).includes('timespent'));
+    settings.set('timeSpentTextColumnId', tstCol ? tstCol.id : null);
+    settings.set('detectedTimeSpentText', tstCol ? tstCol.title : '');
+    api.setCredentials({ timeSpentTextColumnId: tstCol ? tstCol.id : null });
+    if (tstCol) log(`Time Spent text column: ${tstCol.id} ("${tstCol.title}")`);
+    else log('Time Spent text column NOT found');
+
     if (tsCol) {
       settings.set('timeSpentColumnId', tsCol.id);
       settings.set('detectedTimeSpent', tsCol.title);
@@ -728,16 +781,16 @@ function detectColumns() {
       settings.set('detectedTimeSpent', '');
       api.setCredentials({ timeSpentColumnId: null });
       log('Time Spent numbers column NOT found');
-      setTimeout(() => sendToast({
-        text: 'No "Time Spent" numbers column found on your board — minutes will NOT be written. Open Settings to pick one.',
-        durationMs: 10000
-      }), 3000);
     }
 
-    const tstCol = cols.find((c) => c.type === 'text' && norm(c.title).includes('timespent'));
-    settings.set('timeSpentTextColumnId', tstCol ? tstCol.id : null);
-    api.setCredentials({ timeSpentTextColumnId: tstCol ? tstCol.id : null });
-    if (tstCol) log(`Time Spent text column: ${tstCol.id} ("${tstCol.title}")`);
+    if (!tsCol && !tstCol) {
+      setTimeout(() => sendToast({
+        text: 'No "Time Spent" column on this board — time is kept in the widget and sent once you add one. See Settings.',
+        durationMs: 10000
+      }), 3000);
+    } else {
+      processTimeWrites(); // send anything that was waiting for a column
+    }
   }).catch((err) => log('column detection failed: ' + err.message));
 }
 
@@ -764,12 +817,17 @@ function registerIpc() {
 
   ipcMain.handle('adjust-last-session', (_e, { itemId, ms }) => {
     const jt = settings.getJobTimer(itemId);
-    const subtract = Math.min(ms, Math.max(0, jt.deltaMs));
+    const left = lastSession && sameItem(lastSession.itemId, itemId) ? lastSession.remainingMs : 0;
+    const subtract = Math.max(0, Math.min(ms, left, jt.deltaMs));
+    if (subtract === 0) return { adjustedMs: 0 };
+    lastSession.remainingMs -= subtract;
     jt.deltaMs -= subtract;
     jt.totalMs = Math.max(0, jt.totalMs - subtract);
     jt.todayMs = Math.max(0, jt.todayMs - subtract);
     settings.setJobTimer(itemId, jt);
     log(`adjust-last-session item=${itemId} subtracted=${subtract}ms`);
+    // The stopped session was already added to Monday — take the time back there too.
+    sendTimeToMonday(itemId, lastSession.itemName, -subtract);
     return { adjustedMs: subtract };
   });
 
@@ -906,17 +964,19 @@ function registerIpc() {
   ipcMain.handle('settings:get-columns', async () => {
     const manual = settings.get('timeSpentColumnManual') || '';
     const detected = settings.get('detectedTimeSpent') || '';
-    if (demoMode) return { ok: false, columns: [], detected, manual };
+    const detectedText = settings.get('detectedTimeSpentText') || '';
+    if (demoMode) return { ok: false, columns: [], detected, detectedText, manual };
     try {
       const cols = await api.getColumns();
       return {
         ok: true,
         columns: cols.filter((c) => c.type === 'numbers' || c.type === 'numeric'),
         detected,
+        detectedText,
         manual
       };
     } catch (err) {
-      return { ok: false, columns: [], error: err.message, detected, manual };
+      return { ok: false, columns: [], error: err.message, detected, detectedText, manual };
     }
   });
   ipcMain.handle('settings:save', (_e, payload) => {
@@ -1020,6 +1080,10 @@ if (!gotLock) {
 
 
     log(`started (demoMode=${demoMode})`);
+    if (settings.movedToNewBoard) {
+      log('moved from old board 7833051194 to the new board ' + settings.DEFAULT_BOARD_ID);
+      setTimeout(() => sendToast({ text: 'Switched to the new Projects board.', durationMs: 7000 }), 2500);
+    }
 
     if (process.env.SMOKE_TEST) runSmokeTest();
     if (process.env.CAPTURE) runCapture();
