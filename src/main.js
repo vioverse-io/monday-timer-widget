@@ -20,7 +20,7 @@ const PILL_SIZE_IDLE = { w: 172, h: 48 };  // idle/resume: grabber + one action
 const DEFAULT_FULL_SIZE = { w: 340, h: 360 };
 const VIEW_SIZES = {
   idle:    { w: 340, h: 392 },
-  running: { w: 340, h: 324 },
+  running: { w: 340, h: 260 },
   picker:  { w: 340, h: 480 },
 };
 
@@ -39,6 +39,11 @@ let lastFullView = 'idle';
 let currentView = 'idle';
 let currentPillSize = null;  // {w,h} the pill window is currently locked to (measured)
 let moveDrag = null;         // drag origin during pill move (suppresses resize/reposition)
+// Pop-ups (Comment, morning check-in…) can be taller than the view they open over.
+// Transient only — cleared when the pop-up closes; NOT a remembered user size.
+let overlayMinH = 0;         // height the open pop-up needs (renderer-measured); 0 = none open
+let overlayBaseH = null;     // content height before a pop-up grew the window
+let overlayPushedY = null;   // { from, to } if growing had to move the window up to stay on screen
 
 // ---------------------------------------------------------------------------
 // Logging (weekly-rotated file in userData/logs)
@@ -244,6 +249,8 @@ function resizeForView(view, pillW) {
   const b = mainWindow.getBounds();
 
   if (view === 'pill') {
+    overlayBaseH = null;
+    overlayPushedY = null;
     // Width comes measured from the renderer (bar's real content width). Fallback to
     // the old constants if it's ever missing. Clamped for sanity.
     const fallback = timer.isRunning() ? PILL_SIZE : PILL_SIZE_IDLE;
@@ -270,6 +277,36 @@ function resizeForView(view, pillW) {
   const x = Math.round(b.x + b.width - size.w);  // keep right edge fixed here too
   mainWindow.setContentSize(size.w, size.h);
   mainWindow.setPosition(x, b.y);
+  overlayBaseH = null;   // a pop-up still open over the NEW view grows from its standard size
+  growForOverlay();
+}
+
+// While a pop-up is open, make the window at least as tall as the pop-up needs (never
+// shrinks a window the user grip-resized bigger). If that would run off the bottom of
+// the screen, move it up. When the pop-up closes, put the height (and position) back.
+function growForOverlay() {
+  if (!mainWindow || mainWindow.isDestroyed() || currentView === 'pill') return;
+  const b = mainWindow.getBounds();
+  const [cw, ch] = mainWindow.getContentSize();
+  if (overlayMinH > 0) {
+    const wa = screen.getDisplayMatching(b).workArea;
+    const need = Math.min(overlayMinH, wa.height);
+    if (ch >= need) return;
+    if (overlayBaseH === null) overlayBaseH = ch;
+    mainWindow.setContentSize(cw, need);
+    const maxY = wa.y + wa.height - need;
+    if (b.y > maxY) {
+      const to = Math.max(wa.y, maxY);
+      overlayPushedY = { from: overlayPushedY ? overlayPushedY.from : b.y, to };
+      mainWindow.setPosition(b.x, to);
+    }
+  } else if (overlayBaseH !== null) {
+    mainWindow.setContentSize(cw, overlayBaseH);
+    // Move back down only if the user didn't move the window while the pop-up was open.
+    if (overlayPushedY && b.y === overlayPushedY.to) mainWindow.setPosition(b.x, overlayPushedY.from);
+    overlayBaseH = null;
+    overlayPushedY = null;
+  }
 }
 
 function showWidget() {
@@ -476,9 +513,8 @@ async function processTimeWrites() {
   for (const id of new Set(flushedItems.map(String))) {
     if (!hasPendingFor(id)) pushSyncStatus({ itemId: id, status: 'saved' });
   }
-  if (flushedMs > 0) {
-    sendToast({ text: `Caught up: ${fmt(flushedMs)} added to Monday`, durationMs: 5000 });
-  }
+  // No toast here (v2.7.0): the "not yet saved" badge clearing is the signal.
+  if (flushedMs > 0) log(`caught up: ${fmt(flushedMs)} added to Monday`);
 }
 
 function startOrSwitch(job) {
@@ -564,12 +600,14 @@ function switchAndLog(jobInput) {
   pushState();
   refreshTrayMenu();
 
-  sendToast({ text: `Switched to ${shortName(jobInput.itemName)}`, undo: true, durationMs: 10000 });
+  // The toast IS the Undo button, so its duration and the undo window must match.
+  const UNDO_MS = 5000;
+  sendToast({ text: `Switched to ${shortName(jobInput.itemName)}`, undo: true, durationMs: UNDO_MS });
   clearTimeout(undoTimer);
   undoTimer = setTimeout(() => {
     timer.clearUndo();
     pushState();
-  }, 10000);
+  }, UNDO_MS);
   return appState();
 }
 
@@ -585,7 +623,6 @@ function undoSwitch() {
   setTrayState('running');
   pushState();
   refreshTrayMenu();
-  sendToast({ text: `Back on ${shortName(prev.itemName)}`, undo: false, durationMs: 4000 });
   return appState();
 }
 
@@ -884,8 +921,25 @@ function registerIpc() {
   });
 
   ipcMain.on('view-changed', (_e, view, pillW) => {
-    if (moveDrag) return; // don't reposition during pill drag
+    if (moveDrag) {
+      // Don't reposition during a pill drag — but a drag that never got its move-end
+      // (lost pointer) must not block window sizing forever.
+      if (Date.now() - moveDrag.t < 1500) return;
+      log('stale pill drag cleared (no move-end received)');
+      moveDrag = null;
+    }
     resizeForView(view, pillW);
+    // TEMP diag (v2.7.0 test builds): "minimize does nothing after a grip-resize".
+    if (view === 'pill' && mainWindow && !mainWindow.isDestroyed()) {
+      const [w, h] = mainWindow.getContentSize();
+      const p = currentPillSize;
+      log(`pill: requested ${p ? p.w + 'x' + p.h : '?'} -> window now ${w}x${h}`);
+    }
+  });
+  ipcMain.on('overlay-height', (_e, h) => {
+    const n = Number(h);
+    overlayMinH = isFinite(n) && n > 0 ? Math.min(Math.round(n), 1400) : 0;
+    growForOverlay();
   });
   ipcMain.on('collapse', () => resizeForView('pill'));
   ipcMain.on('expand', () => resizeForView(lastFullView));
@@ -905,11 +959,12 @@ function registerIpc() {
   ipcMain.on('move-start', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     const b = mainWindow.getBounds();
-    moveDrag = { x: b.x, y: b.y };
+    moveDrag = { x: b.x, y: b.y, t: Date.now() };
   });
   ipcMain.on('move-to', (_e, { dx, dy }) => {
     if (!mainWindow || mainWindow.isDestroyed() || !moveDrag) return;
     if (typeof dx !== 'number' || typeof dy !== 'number' || !isFinite(dx) || !isFinite(dy)) return;
+    moveDrag.t = Date.now();
     mainWindow.setPosition(Math.round(moveDrag.x + dx), Math.round(moveDrag.y + dy));
   });
   ipcMain.on('move-end', () => { moveDrag = null; });

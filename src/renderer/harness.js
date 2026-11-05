@@ -14,6 +14,7 @@
 //   ?morning=1        show the morning check-in modal
 //   ?sync=2           show the "N sessions not yet saved" indicator
 //   ?write=queued     outcome shown under the clock after Stop (queued | no-column; default saved)
+//   ?groups=many      a board with more groups than fit the picker's filter row
 // And window.__harness.trigger(kind, arg) exposes the same for manual driving.
 
 (function () {
@@ -27,6 +28,15 @@
     { id: 'g2', title: 'Low Priority Projects', color: '#0073EA' },
     { id: 'g3', title: 'Declined Requests', color: '#FDAB3D' }
   ];
+  if (params.get('groups') === 'many') {
+    MOCK_GROUPS.push(
+      { id: 'g4', title: 'Incoming', color: '#579BFC' },
+      { id: 'g5', title: 'Needs Discussion', color: '#A25DDC' },
+      { id: 'g6', title: 'ELT', color: '#00C875' },
+      { id: 'g7', title: 'Hansen', color: '#FF642E' },
+      { id: 'g8', title: 'On Hold', color: '#C4C4C4' }
+    );
+  }
 
   const MOCK_JOBS = [
     { id: '1', name: 'Command HPP - Medicare Provider Termination - 111122', groupId: 'g1', assignedToMe: true, todayMs: 5025000, totalMs: 5025000 + H * 9, lastSessionAt: Date.now() - 720000 },
@@ -234,6 +244,7 @@
       return Promise.resolve({ ok: true, exportId: jt.exportCount, sessionMs, totalMs });
     },
     viewChanged: () => {},
+    overlayHeight: (h) => { window.__harnessOverlayH = h; },
     collapse: () => {},
     expand: () => {},
     moveStart: () => {},

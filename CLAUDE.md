@@ -46,13 +46,26 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
    user is toasted). Never make a write path silent.
 
 ## Status
-- **v2.6.2** on `main`. HANDOFF-5 through HANDOFF-14 applied (`production/` files stop
+- **v2.7.0** on `main`. HANDOFF-5 through HANDOFF-14 applied (`production/` files stop
   at 11 — 12–14 were never saved as files; their changes are in CHANGELOG.md). v2.6.1/
-  v2.6.2 were direct bug fixes with no handoff. **Next handoff number: HANDOFF-15.**
+  v2.6.2 were direct bug fixes with no handoff. **HANDOFF-15
+  (`production/HANDOFF-15-VISUAL-REFRESH.md`) is PARTLY applied: Parts 1–3 shipped in
+  v2.7.0; Parts 4–6 (picker rows, pill, Settings) still to do, Part 7 optional.** Its
+  find blocks for Parts 4/5/7 were re-checked after v2.7.0's extra fixes and still match.
+  Next new handoff number after 15 is done: HANDOFF-16.
+- Open from v2.7.0 testing: −5m flash (`.distract-flash top: 118px`) overlaps the
+  Today/Total line (suggested 142px, awaiting David); stray "· " before the post-stop
+  write label (pre-existing); "minimize does nothing after a grip-resize" on Windows —
+  not reproducible in Linux Electron; TEMP `pill: requested … -> window now …` log line
+  in main.js is there to diagnose it (remove once solved). Part 7 would hit its own STOP
+  condition: the write label renders into `#total`.
 - Board: **18434287092** ("Projects"). v2.6.2 moves installs still on the old board
   7833051194 once (`boardMoveDone` flag); a later manual pick is respected.
 - Window/pill model: one frameless window. Full views auto-size via `VIEW_SIZES`
-  (idle 340×392, running 340×324, picker 340×480). Minimize = pill (48px bar):
+  (idle 340×392, running 340×260, picker 340×480). While a pop-up (`.modal-overlay`)
+  is open the renderer reports its height (`overlayHeight` IPC) and main's
+  `growForOverlay()` grows the window to fit, then restores it on close — transient,
+  NOT a remembered size (rule 6 still holds). Minimize = pill (48px bar):
   the renderer measures the bar's true content width (`width: max-content` +
   ResizeObserver → `viewChanged('pill', w)`), main sizes the window to match, keeps
   the RIGHT edge pinned, and locks min==max so native edge-resize is inert; a
@@ -73,8 +86,10 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
   stale post-stop "Play" state clears when any timer starts; same-day relaunch subtracts
   the time the app wasn't running (`lastSeenAt` gap, >2 min, with a notification);
   different-day relaunch = morning check-in modal.
-- Monday: additive `addTimeSpent` on stop/switch; failures queue + toast; catch-up toast
-  when flushed. All `addTimeSpent` calls are SERIALIZED (`writeChain`) — overlapping
+- Monday: additive `addTimeSpent` on stop/switch; failures queue + toast; a flush is
+  only logged (no "caught up" toast since v2.7.0). Toasts are for failures/warnings
+  plus the 5 s "Switched — Undo" (toast duration == undo window); success
+  confirmations are silent by David's choice. All `addTimeSpent` calls are SERIALIZED (`writeChain`) — overlapping
   read-then-writes on one item erased minutes. "No Time Spent column" sessions are
   QUEUED (not dropped) and flush right after column detection. If a requested column
   isn't on the item (stale IDs after a board change), the read returns unknown → no
@@ -86,13 +101,16 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
   chips post an array of user ids. API version 2026-01, `items_page(limit: 500)`.
 - Picker: group pills scope browsing; typing searches the WHOLE board (results colored
   by their own group). Recents capped at 4. Job list follows board order (no due-date
-  re-sort).
+  re-sort). The group row scrolls sideways with ‹ › arrows (shown only when groups
+  overflow that way) and the mouse wheel; harness `?groups=many` reproduces overflow.
 - Settings: hotkey recorder requires a modifier (Ctrl/Alt/Win); Time Spent column
   picker with auto-detect status; theme dark/light/auto (default = Monday-light).
   Close-to-tray on by default. Manual clock editing (increase-only).
-- Theme: default is light (Monday-neutral palette: airy white + cool grays). Dark
-  theme is neutral graphite (no warm/gold cast). Shadows are soft gray, not pink.
-  Demo mode label hidden (no longer offered in the UI).
+- Theme (v2.7.0, HANDOFF-15 "Monday Native"): flat surfaces — light is plain white with
+  no pink chips and text capped at #404040; dark is graphite, no coral; no card
+  shadows; tight corners (4–8px, no capsules). Selected mention chips are solid
+  `--accent-blue`. Demo mode is NOT offered anywhere in the UI (welcome button removed
+  in v2.7.0 — the app is live-only); the internal no-token mock stays for tests.
 - Electron pinned exactly (42.2.0) — "latest" caused user/coworker version drift.
 
 ## How to verify changes (no Monday token needed)
@@ -104,7 +122,10 @@ Original spec: `monday_timer_widget_build_prompt_v2.md` (historical). Architectu
   packaged builds.
 - **Main-process self-test:**
   `SMOKE_TEST=1 ELECTRON_ENABLE_LOGGING=1 ./node_modules/.bin/electron . --no-sandbox`
-  (expects the 12 mock jobs).
+  (expects the 12 mock jobs). Needs a display: if `$DISPLAY` is empty (WSLg not
+  running → "Missing X server"), run `wsl --shutdown` in PowerShell and reopen, or use
+  Xvfb (`sudo apt install xvfb`, then prefix `xvfb-run -a`). Never run SMOKE_TEST
+  against the Windows install — it starts/stops timers with the real token.
 - **Render real Electron to PNGs:** `CAPTURE=1 ... electron .` → writes `/tmp/cap-*.png`.
 
 ## Build the Windows installer

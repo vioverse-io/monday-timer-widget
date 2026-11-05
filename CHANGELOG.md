@@ -1,5 +1,38 @@
 # Changelog
 
+## v2.7.0
+**HANDOFF-15 Parts 1–3** (visual refresh, "Monday Native"). Parts 4–6 — picker rows,
+pill, Settings window — are not applied yet.
+- **Tokens (Part 1)**: flat white light theme, no pink chips, text capped at #404040;
+  `--text-tertiary` and `--accent-yellow` now readable (≈4.8:1). Dark theme graphite,
+  no coral. Card shadows removed.
+- **Radii (Part 2)**: capsule buttons, search, filter pills, toasts, alerts, modals and
+  mention chips all get tight corners (4–8px).
+- **Running view (Part 3)**: decorative progress track removed, run card flattened,
+  job number plain mono, clock 48px, −5m / −15m / Comment are quiet text buttons, no
+  button shadows. Running window 340×324 → **340×260**.
+
+Outside the handoff (David-approved during testing):
+- **Selected mention chips are visible again**: solid blue (`--accent-blue`) — Part 1's
+  neutral chip tokens had made selected and unselected identical.
+- **Demo mode no longer offered**: "Try demo mode" removed from the welcome screen (the
+  app is live-only). The internal no-token mock mode stays for SMOKE_TEST + harness.
+- **Group arrows in the picker**: ‹ › appear when groups overflow the row; mouse wheel
+  scrolls it sideways; picking a group no longer resets the row to the start.
+- **Pop-ups never crop**: while Comment / morning check-in is open the window grows to
+  fit (moves up if it would leave the screen) and returns when it closes. Transient —
+  not a remembered size. Fallback: the pop-up scrolls.
+- **Fewer toasts**: removed "Comment posted to Monday", "Back on …" (after Undo) and
+  "Caught up …" (now a log line). "Switched — Undo" 10 s → 5 s (undo window matches).
+  All failure/warning toasts unchanged.
+- **Minimize after a grip-resize** (reported on Windows, not reproducible in Linux
+  Electron): a pill drag that never received move-end can no longer block window
+  sizing (stale after 1.5 s; drags also end on lostpointercapture). TEMP diagnostic:
+  every minimize logs `pill: requested WxH -> window now WxH`.
+- Known, pre-existing: after Stop the totals line reads "· Saved to Monday" (stray
+  separator). The −5m flash (`top: 118px`) overlaps the Today/Total line — awaiting a
+  decision (suggested 142px).
+
 ## v2.6.2
 - **New board**: default board is now 18434287092. Installs still on the old board
   (7833051194) are moved once, with a toast; a later manual choice is respected.

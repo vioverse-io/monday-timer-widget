@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('timerAPI', {
 
   // ---- fire-and-forget ----
   viewChanged: (view, pillW) => ipcRenderer.send('view-changed', view, pillW),
+  overlayHeight: (h) => ipcRenderer.send('overlay-height', h),
   collapse: () => ipcRenderer.send('collapse'),
   expand: () => ipcRenderer.send('expand'),
   moveStart: () => ipcRenderer.send('move-start'),

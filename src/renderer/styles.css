@@ -6,62 +6,61 @@
    ================================================================ */
 
 :root {
-  /* neutral graphite (dark) — cooler, lighter fills, no warm/gold cast */
-  --bg-primary:      #24262B;
-  --bg-secondary:    #30333A;   /* elevated card / selected fill */
-  --bg-tertiary:     #2B2E34;   /* recessed / row rest */
-  --border:          #3A3D44;
-  --border-strong:   #474B53;
-  --hairline:        #33363C;
-  --text-primary:    #F5F6F8;
-  --text-body:       #D6D8DE;
-  --text-secondary:  #AEB1BA;
-  --text-tertiary:   #8A8E98;
-  --chip-bg:         rgba(233,84,104,.16);
-  --chip-fg:         #F58399;
-  --neutral-chip-bg: #3A3D44;
-  --neutral-chip-fg: #B6B9C2;
-  --ctrl-icon:       #969AA4;
-  --accent-red:      #EA5468;   /* coral */
+  /* HANDOFF-15 — neutral graphite, flattened: no card shadows, no coral */
+  --bg-primary:      #202225;
+  --bg-secondary:    #292C30;   /* elevated card / selected fill */
+  --bg-tertiary:     #2B2E33;   /* recessed / row rest */
+  --border:          #3A3E44;
+  --border-strong:   #4A4F56;
+  --hairline:        #2E3137;
+  --text-primary:    #ECEDEF;
+  --text-body:       #C8CBCF;
+  --text-secondary:  #AFB4BA;
+  --text-tertiary:   #9BA0A6;
+  --chip-bg:         #31353B;
+  --chip-fg:         #9BA0A6;
+  --neutral-chip-bg: #31353B;
+  --neutral-chip-fg: #9BA0A6;
+  --ctrl-icon:       #868C93;
+  --accent-red:      #C84A54;
   --accent-green:    #00C875;
-  --accent-blue:     #0073EA;
-  --accent-yellow:   #FDAB3D;
-  --idle-dot:        #565A63;
-  --track:           #3A3D44;
-  --track-fill:      #EA5468;
-  --window-shadow:   0 22px 54px rgba(0,0,0,.5);
-  --card-shadow:     0 3px 12px rgba(0,0,0,.28);
-  --pill-shadow:     0 12px 30px rgba(0,0,0,.5);
+  --accent-blue:     #579BFC;
+  --accent-yellow:   #E8A317;
+  --idle-dot:        #5A6068;
+  --track:           #3A3E44;
+  --track-fill:      #C84A54;
+  --window-shadow:   0 10px 30px rgba(0,0,0,.45);
+  --card-shadow:     none;
+  --pill-shadow:     0 6px 18px rgba(0,0,0,.42);
 }
 
-/* warm cream paper (light) */
+/* HANDOFF-15 — flat white, no pink chips, 75% black ceiling on text */
 :root[data-theme="light"] {
-  /* Monday-like neutral light — airy white + cool grays */
-  --bg-primary:      #F6F7FB;
-  --bg-secondary:    #FFFFFF;
-  --bg-tertiary:     #EEF0F5;
-  --border:          #E6E9EF;
-  --border-strong:   #D0D4E4;
-  --hairline:        #EDEFF4;
-  --text-primary:    #323338;
-  --text-body:       #4B4E57;
-  --text-secondary:  #676879;
-  --text-tertiary:   #9699A6;
-  --chip-bg:         #FCE7EA;
-  --chip-fg:         #D83A4E;
-  --neutral-chip-bg: #EEF0F5;
-  --neutral-chip-fg: #676879;
-  --ctrl-icon:       #9699A6;
-  --accent-red:      #E14B62;
-  --accent-green:    #00C875;
-  --accent-blue:     #0073EA;
-  --accent-yellow:   #FDAB3D;
-  --idle-dot:        #C3C6D4;
-  --track:           #E6E9EF;
-  --track-fill:      #E14B62;
-  --window-shadow:   0 22px 54px rgba(60,45,30,.16);
-  --card-shadow:     0 3px 10px rgba(60,45,30,.06);
-  --pill-shadow:     0 12px 30px rgba(60,45,30,.2);
+  --bg-primary:      #FFFFFF;
+  --bg-secondary:    #F5F6FA;
+  --bg-tertiary:     #F0F1F5;
+  --border:          #E3E5EA;
+  --border-strong:   #D9DCE2;
+  --hairline:        #EDEFF3;
+  --text-primary:    #404040;
+  --text-body:       #53575D;
+  --text-secondary:  #63686F;
+  --text-tertiary:   #6E737A;
+  --chip-bg:         #F1F2F4;
+  --chip-fg:         #6E737A;
+  --neutral-chip-bg: #F1F2F4;
+  --neutral-chip-fg: #6E737A;
+  --ctrl-icon:       #8A8F96;
+  --accent-red:      #C84A52;
+  --accent-green:    #00B86B;
+  --accent-blue:     #2F6DB5;
+  --accent-yellow:   #B5790F;
+  --idle-dot:        #C8CBD0;
+  --track:           #E3E5EA;
+  --track-fill:      #C84A52;
+  --window-shadow:   0 10px 30px rgba(32,34,37,.12);
+  --card-shadow:     none;
+  --pill-shadow:     0 6px 18px rgba(32,34,37,.10);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -255,12 +254,12 @@ html, body {
 
 /* ================= RUNNING VIEW ================= */
 .run-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 15px 15px 16px;
-  box-shadow: var(--card-shadow);
-  margin-bottom: 11px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  margin-bottom: 13px;
 }
 .job-line {
   display: flex;
@@ -269,13 +268,13 @@ html, body {
 }
 .job-number {
   display: inline-flex;
-  padding: 3px 8px;
-  border-radius: 7px;
-  background: var(--chip-bg);
-  color: var(--chip-fg);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: .3px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .2px;
   flex-shrink: 0;
   font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 }
@@ -287,14 +286,14 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.time-row { margin-top: 14px; }
+.time-row { margin-top: 11px; }
 .elapsed {
-  font-size: 56px;
-  font-weight: 500;
+  font-size: 48px;
+  font-weight: 400;
   font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   color: var(--text-primary);
-  letter-spacing: .5px;
-  line-height: .9;
+  letter-spacing: -1.8px;
+  line-height: 1;
 }
 
 /* Linear progress "timing device" (decorative; fills across the hour) */
@@ -330,6 +329,9 @@ html, body {
 .totals {
   font-size: 11px;
   color: var(--text-tertiary);
+  margin-top: 11px;
+  min-height: 28px;
+  line-height: 14px;
 }
 .totals strong { color: var(--text-secondary); font-weight: 600; }
 .totals-sep { color: var(--text-tertiary); }
@@ -341,7 +343,7 @@ html, body {
   font-size: 13px;
   font-weight: 600;
   font-family: inherit;
-  border-radius: 21px;
+  border-radius: 8px;
   padding: 6px 12px;
   cursor: pointer;
   display: inline-flex;
@@ -357,10 +359,10 @@ html, body {
   background: var(--accent-red);
   color: #fff;
   border: none;
-  border-radius: 23px;
-  font-size: 14px;
-  font-weight: 700;
-  box-shadow: 0 6px 16px rgba(40,45,70,.12);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
 }
 .btn-primary:hover { filter: brightness(1.06); }
 .btn-stop {
@@ -369,10 +371,10 @@ html, body {
   background: var(--accent-red);
   color: #fff;
   border: none;
-  border-radius: 21px;
+  border-radius: 5px;
   font-size: 13.5px;
-  font-weight: 700;
-  box-shadow: 0 6px 16px rgba(40,45,70,.12);
+  font-weight: 600;
+  box-shadow: none;
 }
 .btn-stop:hover { filter: brightness(1.06); }
 .btn-switch {
@@ -381,7 +383,7 @@ html, body {
   background: var(--bg-secondary);
   color: var(--text-body);
   border: 1px solid var(--border-strong);
-  border-radius: 21px;
+  border-radius: 5px;
   font-weight: 600;
 }
 .btn-switch:hover { background: var(--bg-tertiary); }
@@ -395,30 +397,31 @@ html, body {
 /* ---- Distraction recovery + Log button row ---- */
 .distract-row { margin-top: 9px; align-items: center; }
 .btn-distract {
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 17px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 4px;
   border: none;
-  background: var(--bg-secondary);
+  background: transparent;
   color: var(--text-tertiary);
   font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
   font-size: 11.5px;
   font-weight: 500;
-  flex: none;
+  flex: 1;
 }
-.btn-distract:hover { color: var(--text-secondary); }
+.btn-distract:hover { background: var(--bg-secondary); color: var(--text-primary); }
 
 /* Log to Monday — first-class, discoverable action */
 .btn-log {
-  flex: 1;
-  height: 34px;
-  border: 1.5px solid var(--accent-red);
-  border-radius: 17px;
-  background: var(--bg-secondary);
-  color: var(--accent-red);
+  flex: 1.4;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
   font-family: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -426,7 +429,7 @@ html, body {
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
-.btn-log:hover { background: var(--chip-bg); }
+.btn-log:hover { background: var(--bg-secondary); color: var(--text-primary); }
 .btn-log svg { pointer-events: none; }
 
 .distract-flash {
@@ -466,7 +469,7 @@ html, body {
   font-weight: 600;
   font-family: inherit;
   padding: 6px 13px;
-  border-radius: 16px;
+  border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
@@ -487,7 +490,7 @@ html, body {
   height: 40px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 5px;
   color: var(--text-primary);
   font-size: 13px;
   font-family: inherit;
@@ -499,7 +502,7 @@ html, body {
 .search:focus { border-color: var(--accent-red); }
 textarea.search {
   height: auto;
-  border-radius: 14px;
+  border-radius: 5px;
   padding: 10px 12px;
   resize: vertical;
   font-family: inherit;
@@ -715,7 +718,7 @@ textarea.search {
   bottom: 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-strong);
-  border-radius: 14px;
+  border-radius: 5px;
   padding: 12px 15px;
   display: flex;
   align-items: center;
@@ -742,13 +745,13 @@ textarea.search {
   bottom: 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 5px;
   padding: 15px;
   box-shadow: var(--window-shadow);
 }
 .alert-msg { font-size: 12.5px; color: var(--text-primary); margin-bottom: 11px; line-height: 1.4; }
 .alert-actions { display: flex; gap: 8px; }
-.alert-actions .btn { flex: 1; height: 36px; padding: 6px; font-size: 12px; border-radius: 18px; }
+.alert-actions .btn { flex: 1; height: 36px; padding: 6px; font-size: 12px; border-radius: 5px; }
 
 /* ================= SYNC INDICATOR ================= */
 .sync {
@@ -778,7 +781,7 @@ textarea.search {
 .modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 16px;
   width: 100%;
   display: flex;
@@ -792,6 +795,30 @@ textarea.search {
 .modal-btn { width: 100%; height: 42px; }
 .mention-lead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-tertiary); margin: 2px 0 -2px; }
 .mention-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.mention-chip { font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 14px; padding: 5px 11px; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+.mention-chip { font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 5px 11px; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
 .mention-chip:hover { border-color: var(--border-strong); }
-.mention-chip.selected { background: var(--chip-bg); color: var(--chip-fg); border-color: transparent; }
+.mention-chip.selected { background: var(--accent-blue); color: var(--bg-primary); border-color: transparent; }
+
+/* ---- Group filter arrows: shown only when more groups are off-screen that way ---- */
+.filter-scroller { position: relative; flex: 1; min-width: 0; display: flex; }
+.filter-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  -webkit-app-region: no-drag;
+}
+.filter-arrow-prev { left: 0;  justify-content: flex-start; background: linear-gradient(to right, var(--bg-primary) 60%, transparent); }
+.filter-arrow-next { right: 0; justify-content: flex-end;   background: linear-gradient(to left,  var(--bg-primary) 60%, transparent); }
+.filter-arrow:hover { color: var(--text-primary); }
+.filter-arrow svg { pointer-events: none; }
+
+/* ---- Pop-ups never crop: the window grows to fit (main.js growForOverlay); if the
+   screen is too small for that, the pop-up scrolls instead of being cut off. ---- */
+.modal-overlay { overflow-y: auto; align-items: safe center; }

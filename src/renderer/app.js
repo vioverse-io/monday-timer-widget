@@ -489,6 +489,7 @@
 
   function renderFilterPills() {
     const row = $('filter-row');
+    const keepScroll = row.scrollLeft; // re-render must not jump back to the first group
     row.innerHTML = '';
     const gid = effectiveGroupId();
     for (const g of (jobs.groups || [])) {
@@ -512,6 +513,73 @@
       });
       row.appendChild(pill);
     }
+    row.scrollLeft = keepScroll;
+    revealActivePill();
+    updateFilterArrows();
+  }
+
+  // Group row overflows on real boards (Incoming, Needs Discussion, ELT, …): ‹ › arrows
+  // appear only on a side that has more groups hidden. The arrows overlay the row's
+  // edges, so ARROW_PAD keeps the selected group clear of them.
+  const ARROW_PAD = 34;
+  function updateFilterArrows() {
+    const row = $('filter-row');
+    if (!row) return;
+    const max = row.scrollWidth - row.clientWidth;
+    $('filter-prev').classList.toggle('hidden', row.scrollLeft <= 1);
+    $('filter-next').classList.toggle('hidden', row.scrollLeft >= max - 1);
+  }
+  function revealActivePill() {
+    const row = $('filter-row');
+    const act = row && row.querySelector('.filter-pill.active');
+    if (!act || row.scrollWidth <= row.clientWidth) return;
+    const r = row.getBoundingClientRect(), p = act.getBoundingClientRect();
+    if (p.left < r.left + ARROW_PAD) row.scrollLeft -= r.left + ARROW_PAD - p.left;
+    else if (p.right > r.right - ARROW_PAD) row.scrollLeft += p.right - (r.right - ARROW_PAD);
+  }
+  function bindFilterArrows() {
+    const row = $('filter-row');
+    const step = () => Math.max(80, Math.round(row.clientWidth * 0.7));
+    $('filter-prev').addEventListener('click', () => row.scrollBy({ left: -step(), behavior: 'smooth' }));
+    $('filter-next').addEventListener('click', () => row.scrollBy({ left: step(), behavior: 'smooth' }));
+    row.addEventListener('scroll', updateFilterArrows, { passive: true });
+    // A normal (vertical) mouse wheel over the row scrolls it sideways.
+    row.addEventListener('wheel', (e) => {
+      if (row.scrollWidth <= row.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      row.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+    // Row width changes when the picker is shown or the window is resized.
+    if (window.ResizeObserver) new ResizeObserver(updateFilterArrows).observe(row);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateFilterArrows);
+  }
+
+  // ---- pop-ups: tell main how tall the open one is, so the window grows to fit ----
+  // (main.js growForOverlay). 0 = none open → main puts the window back.
+  let lastOverlayH = -1;
+  function reportOverlayHeight() {
+    let need = 0;
+    document.querySelectorAll('.modal-overlay').forEach((ov) => {
+      if (ov.classList.contains('hidden')) return;
+      const m = ov.querySelector('.modal');
+      if (!m) return;
+      const cs = getComputedStyle(ov);
+      const h = m.getBoundingClientRect().height + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      need = Math.max(need, Math.ceil(h));
+    });
+    if (need === lastOverlayH) return;
+    lastOverlayH = need;
+    if (api.overlayHeight) api.overlayHeight(need);
+  }
+  function watchOverlays() {
+    const mo = new MutationObserver(reportOverlayHeight); // shown / hidden
+    const ro = window.ResizeObserver ? new ResizeObserver(reportOverlayHeight) : null; // content grew
+    document.querySelectorAll('.modal-overlay').forEach((ov) => {
+      mo.observe(ov, { attributes: true, attributeFilter: ['class'] });
+      const m = ov.querySelector('.modal');
+      if (m && ro) ro.observe(m);
+    });
+    reportOverlayHeight();
   }
 
   async function pickJob(job) {
@@ -574,10 +642,8 @@
       cleanup();
       const result = await api.logTime(itemId, note, mentionIds);
       if (result.ok) {
-        showToast({
-          text: result.mentionSkipped ? "Comment posted (couldn't add the mention)" : 'Comment posted to Monday',
-          durationMs: 4000
-        });
+        // Success is silent (the box closing says it went). Only a partial failure speaks.
+        if (result.mentionSkipped) showToast({ text: "Comment posted (couldn't add the mention)", durationMs: 4000 });
       } else {
         showToast({ text: 'Comment failed: ' + (result.error || 'Unknown error'), durationMs: 6000 });
       }
@@ -783,6 +849,9 @@
       api.moveTo(e.screenX - drag.sx, e.screenY - drag.sy);
     });
     grab.addEventListener('pointerup', () => { if (drag) api.moveEnd(); drag = null; });
+    // If Windows drops the pointer capture without a pointerup, end the drag anyway —
+    // a drag left open blocks main from resizing the window.
+    grab.addEventListener('lostpointercapture', () => { if (drag) api.moveEnd(); drag = null; });
 
     info.addEventListener('click', expandPill);
     // The Job ID# is informational only — it must NOT expand (stay in the bar). Guard BOTH
@@ -859,6 +928,10 @@
       if (drag && drag.started) api.resizeEnd();
       drag = null;
     });
+    grip.addEventListener('lostpointercapture', () => {
+      if (drag && drag.started) api.resizeEnd();
+      drag = null;
+    });
   }
 
   // ---- events binding ----
@@ -866,6 +939,8 @@
     $('settings-btn').addEventListener('click', () => api.openSettings());
     $('min-btn').addEventListener('click', () => setView('pill'));
     $('close-btn').addEventListener('click', () => api.closeRequest());
+    bindFilterArrows();
+    watchOverlays();
     $('back-btn').addEventListener('click', closePicker);
 
     $('start-job-btn').addEventListener('click', () => openPicker('start'));
@@ -957,10 +1032,6 @@
     });
 
     $('welcome-connect').addEventListener('click', () => api.openSettings());
-    $('welcome-demo').addEventListener('click', () => {
-      api.chooseDemo();
-      $('welcome').classList.add('hidden');
-    });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && view === 'picker') closePicker();
